@@ -8,11 +8,17 @@ type BOQItemInsert = Database['public']['Tables']['boq_items']['Insert'];
 
 export const estimateService = {
   // Get all estimates for current organization
-  async getEstimates() {
-    const { data, error } = await supabase
+  async getEstimates(projectId?: string) {
+    let query = supabase
       .from('estimates')
       .select('*, projects(name)')
       .order('created_at', { ascending: false });
+
+    if (projectId) {
+      query = query.eq('project_id', projectId);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
     return data;

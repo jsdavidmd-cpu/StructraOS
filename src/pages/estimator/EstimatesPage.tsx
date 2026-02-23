@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Search, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,17 +13,18 @@ import { useAuthStore } from '@/store/authStore';
 
 export default function EstimatesPage() {
   const navigate = useNavigate();
+  const { projectId } = useParams<{ projectId: string }>();
   const [estimates, setEstimates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     loadEstimates();
-  }, []);
+  }, [projectId]);
 
   const loadEstimates = async () => {
     try {
-      const data = await estimateService.getEstimates();
+      const data = await estimateService.getEstimates(projectId);
       setEstimates(data || []);
     } catch (error) {
       console.error('Failed to load estimates:', error);
@@ -107,7 +108,11 @@ export default function EstimatesPage() {
         total_amount: 0,
       });
 
-      navigate(`/estimates/${(newEstimate as any)?.id}`);
+      if (projectId) {
+        navigate(`/projects/${projectId}/estimates/${(newEstimate as any)?.id}`);
+      } else {
+        navigate(`/estimates/${(newEstimate as any)?.id}`);
+      }
     } catch (error) {
       console.error('Failed to create estimate:', error);
       alert('Failed to create estimate. Check the console for details.');
@@ -214,7 +219,13 @@ export default function EstimatesPage() {
                   <TableRow
                     key={estimate.id}
                     className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => navigate(`/estimates/${estimate.id}`)}
+                    onClick={() => {
+                      if (projectId) {
+                        navigate(`/projects/${projectId}/estimates/${estimate.id}`);
+                      } else {
+                        navigate(`/estimates/${estimate.id}`);
+                      }
+                    }}
                   >
                     <TableCell className="font-medium">{estimate.estimate_number}</TableCell>
                     <TableCell>{estimate.project_name}</TableCell>

@@ -93,17 +93,7 @@ export default function LoginPage() {
             </Button>
 
             <div className="text-center text-sm">
-              Don't have an account?{' '}
-              <a
-                href="#"
-                className="text-primary hover:underline"
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigate('/signup');
-                }}
-              >
-                Sign up
-              </a>
+              Account creation is restricted. Please contact your administrator.
             </div>
           </form>
         </CardContent>

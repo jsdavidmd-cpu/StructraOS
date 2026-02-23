@@ -33,7 +33,7 @@ export interface Database {
           organization_id: string | null;
           email: string;
           full_name: string | null;
-          role: 'admin' | 'engineer' | 'foreman' | 'viewer';
+          role: 'admin' | 'project_manager' | 'engineer' | 'quantity_surveyor' | 'foreman' | 'viewer';
           avatar_url: string | null;
           created_at: string;
           updated_at: string;

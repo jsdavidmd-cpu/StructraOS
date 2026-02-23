@@ -3,7 +3,7 @@ import { useAuthStore } from '@/store/authStore';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRole?: 'admin' | 'engineer' | 'foreman' | 'viewer';
+  requiredRole?: 'admin' | 'project_manager' | 'engineer' | 'quantity_surveyor' | 'foreman' | 'viewer';
 }
 
 export default function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
@@ -29,7 +29,9 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
   if (requiredRole) {
     const roleHierarchy = {
       admin: 4,
+      project_manager: 4,
       engineer: 3,
+      quantity_surveyor: 3,
       foreman: 2,
       viewer: 1,
     };

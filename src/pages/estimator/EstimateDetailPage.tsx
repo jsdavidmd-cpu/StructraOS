@@ -11,7 +11,7 @@ import { formatCurrency } from '@/lib/currency';
 import EnhancedBOQEditorPage from '@/pages/estimator/EnhancedBOQEditorPage';
 
 export default function EstimateDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id, projectId } = useParams<{ id: string; projectId?: string }>();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -79,7 +79,7 @@ export default function EstimateDetailPage() {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">Estimate not found</p>
-        <Button onClick={() => navigate('/estimates')} className="mt-4">
+        <Button onClick={() => navigate(projectId ? `/projects/${projectId}/estimates` : '/estimates')} className="mt-4">
           Back to Estimates
         </Button>
       </div>
@@ -93,7 +93,7 @@ export default function EstimateDetailPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/estimates')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate(projectId ? `/projects/${projectId}/estimates` : '/estimates')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
@@ -108,7 +108,7 @@ export default function EstimateDetailPage() {
             Export PDF
           </Button>
           <Button
-            onClick={() => navigate(`/estimates/${id}/bar-schedule`)}
+            onClick={() => navigate(projectId ? `/projects/${projectId}/estimates/${id}/bar-schedule` : `/estimates/${id}/bar-schedule`)}
             variant="outline"
             className="gap-2"
           >

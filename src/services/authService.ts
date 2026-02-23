@@ -105,34 +105,10 @@ export const authService = {
 
   // Sign up
   async signUp(email: string, password: string, fullName: string) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-        },
-      },
-    });
-
-    if (error) throw error;
-
-    // Create profile
-    if (data.user) {
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: data.user.id,
-          email: data.user.email!,
-          full_name: fullName,
-          role: 'viewer' as any,
-          organization_id: null,
-        } as any);
-
-      if (profileError) throw profileError;
-    }
-
-    return data;
+    void email;
+    void password;
+    void fullName;
+    throw new Error('Self-registration is disabled. Please contact your administrator to create your account.');
   },
 
   // Sign in
@@ -149,6 +125,11 @@ export const authService = {
     }
 
     return data;
+  },
+
+  // Temporary sign in (development only)
+  async temporarySignIn() {
+    throw new Error('Temporary login is disabled. Please sign in with an administrator-created account.');
   },
 
   // Sign out

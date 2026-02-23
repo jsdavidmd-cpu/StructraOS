@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Building2, Home, Paintbrush, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,6 +37,7 @@ const VERTICAL_CATEGORIES: VerticalCategory[] = [
 
 export default function VerticalBOQPage() {
   const navigate = useNavigate();
+  const { projectId } = useParams<{ projectId: string }>();
   const [creatingKey, setCreatingKey] = useState<string | null>(null);
 
   const handleCreateNew = async (category: VerticalCategory) => {
@@ -114,7 +115,11 @@ export default function VerticalBOQPage() {
         total_amount: 0,
       });
 
-      navigate(`/estimates/${(newEstimate as any)?.id}`);
+      if (projectId) {
+        navigate(`/projects/${projectId}/estimates/${(newEstimate as any)?.id}`);
+      } else {
+        navigate(`/estimates/${(newEstimate as any)?.id}`);
+      }
     } catch (error) {
       console.error('Failed to create estimate:', error);
       alert('Failed to create estimate. Check the console for details.');
@@ -133,7 +138,7 @@ export default function VerticalBOQPage() {
           </p>
         </div>
 
-        <Button variant="outline" onClick={() => navigate('/estimates')}>
+        <Button variant="outline" onClick={() => navigate(projectId ? `/projects/${projectId}/estimates` : '/estimates')}>
           View All Estimates
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>

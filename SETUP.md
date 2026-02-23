@@ -52,6 +52,44 @@ RETURNING id;
    - Project URL (e.g., `https://xxx.supabase.co`)
    - anon/public key
 
+### F. Connect This Repo to Supabase CLI (Recommended)
+
+This project already includes migration files in `supabase/migrations` and npm scripts for Supabase CLI.
+
+1. Install Supabase CLI (if not installed):
+```bash
+npm install -g supabase
+```
+
+2. Login once:
+```bash
+npm run supabase:login
+```
+
+3. Link this repo to the hosted project:
+```bash
+npm run supabase:link
+```
+
+4. Migration workflow:
+```bash
+# Create a new timestamped migration file
+npm run supabase:migration:new -- add_new_table
+
+# Push all pending migrations to hosted database
+npm run supabase:push
+
+# Pull remote schema changes into a migration
+npm run supabase:pull
+```
+
+5. Optional local Supabase stack:
+```bash
+npm run supabase:start
+npm run supabase:status
+npm run supabase:stop
+```
+
 ## 3. Environment Configuration
 
 Create `.env` file in project root:
