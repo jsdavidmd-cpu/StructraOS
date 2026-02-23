@@ -403,6 +403,48 @@ export default function SchedulePage() {
     };
   }, [tasks]);
 
+  const weeklySlippage = useMemo(() => {
+    const now = new Date();
+    const weekAgo = new Date(now);
+    weekAgo.setDate(now.getDate() - 7);
+
+    const candidates = tasks
+      .map((task) => {
+        const baselineEnd = task.baseline_end ? new Date(task.baseline_end) : null;
+        const forecastEnd = task.forecast_end ? new Date(task.forecast_end) : null;
+        const plannedEnd = task.planned_end ? new Date(task.planned_end) : null;
+        const comparisonEnd = forecastEnd || plannedEnd;
+        const updatedAt = task.updated_at ? new Date(task.updated_at) : null;
+
+        if (!baselineEnd || !comparisonEnd || !updatedAt) return null;
+        if (Number.isNaN(baselineEnd.getTime()) || Number.isNaN(comparisonEnd.getTime()) || Number.isNaN(updatedAt.getTime())) return null;
+        if (task.status === 'completed') return null;
+        if (updatedAt < weekAgo || updatedAt > now) return null;
+
+        const slipDays = Math.round((comparisonEnd.getTime() - baselineEnd.getTime()) / 86400000);
+        if (slipDays <= 0) return null;
+
+        return {
+          task,
+          slipDays,
+          baselineEnd: baselineEnd.toISOString().slice(0, 10),
+          comparisonEnd: comparisonEnd.toISOString().slice(0, 10),
+          updatedAt: updatedAt.toISOString().slice(0, 10),
+          severity: slipDays >= 14 ? 'high' : slipDays >= 7 ? 'medium' : 'low',
+        };
+      })
+      .filter(Boolean) as Array<{
+        task: ScheduleTask;
+        slipDays: number;
+        baselineEnd: string;
+        comparisonEnd: string;
+        updatedAt: string;
+        severity: 'low' | 'medium' | 'high';
+      }>;
+
+    return candidates.sort((a, b) => b.slipDays - a.slipDays);
+  }, [tasks]);
+
   const toPayload = (): ScheduleTaskInput | null => {
     if (!projectId || !user?.id) return null;
     if (!form.task_name.trim()) return null;
@@ -897,6 +939,36 @@ export default function SchedulePage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">What Slipped This Week</CardTitle>
+          <CardDescription>Recently updated tasks that moved beyond their baseline end dates (last 7 days).</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {weeklySlippage.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No schedule slippage updates detected this week.</p>
+          ) : (
+            <div className="space-y-2">
+              {weeklySlippage.slice(0, 8).map((entry) => (
+                <div key={entry.task.id} className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 border rounded-md p-3">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{entry.task.wbs_code ? `${entry.task.wbs_code} · ` : ''}{entry.task.task_name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{entry.task.phase || 'Unassigned'} • {entry.task.status.replace('_', ' ')}</p>
+                  </div>
+                  <div className="text-xs md:text-right">
+                    <p className={entry.severity === 'high' ? 'text-red-600 font-semibold' : entry.severity === 'medium' ? 'text-amber-600 font-semibold' : 'text-muted-foreground'}>
+                      +{entry.slipDays}d slip ({entry.severity})
+                    </p>
+                    <p className="text-muted-foreground">Baseline: {entry.baselineEnd} → Current: {entry.comparisonEnd}</p>
+                    <p className="text-muted-foreground">Updated: {entry.updatedAt}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Card className="xl:col-span-1">
