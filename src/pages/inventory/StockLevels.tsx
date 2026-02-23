@@ -116,17 +116,17 @@ export default function StockLevels({ organizationId, onUpdated }: StockLevelsPr
                     const isLowStock = level.quantity_on_hand < (item?.reorder_point || 10);
                     return (
                       <tr key={level.id} className={`border-b hover:bg-muted/50 ${isLowStock ? 'bg-red-50' : ''}`}>
-                        <td className="py-2 px-4">{item?.name}</td>
-                        <td className="py-2 px-4">{item?.unit}</td>
-                        <td className="py-2 px-4 text-right font-mono">{level.quantity_on_hand}</td>
+                        <td className="py-2 px-4">{item?.name || 'Unknown Item'}</td>
+                        <td className="py-2 px-4">{item?.unit || 'pcs'}</td>
+                        <td className="py-2 px-4 text-right font-mono">{level.quantity_on_hand || 0}</td>
                         <td className="py-2 px-4 text-right font-mono">{level.quantity_reserved || 0}</td>
                         <td className="py-2 px-4 text-right font-mono text-green-600">
-                          {(level.quantity_on_hand - (level.quantity_reserved || 0))}
+                          {Math.max(0, (level.quantity_on_hand || 0) - (level.quantity_reserved || 0))}
                         </td>
                         <td className="py-2 px-4">
                           <input
                             type="number"
-                            value={level.quantity_on_hand}
+                            value={level.quantity_on_hand || 0}
                             onChange={(e) => {
                               const val = parseInt(e.target.value);
                               if (!isNaN(val)) {

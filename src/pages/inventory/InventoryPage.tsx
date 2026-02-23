@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Package, AlertTriangle, TrendingUp } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { inventoryService } from '@/services/inventoryService';
 import WarehouseManager from './WarehouseManager';
 import MaterialsList from './MaterialsList';
-import StockLevels from './StockLevels';
+import WarehouseStockOverview from './WarehouseStockOverview';
 import StockMovements from './StockMovements';
 
 export default function InventoryPage() {
@@ -99,15 +99,7 @@ export default function InventoryPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Stock Overview</CardTitle>
-              <CardDescription>View inventory levels across all warehouses</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <StockLevels organizationId={profile.organization_id} onUpdated={loadStats} />
-            </CardContent>
-          </Card>
+          <WarehouseStockOverview organizationId={profile.organization_id} onUpdated={loadStats} />
         </TabsContent>
 
         <TabsContent value="warehouses">

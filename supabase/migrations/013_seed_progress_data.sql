@@ -23,44 +23,54 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Create an estimate for this project
-  INSERT INTO estimates (
-    organization_id,
-    project_id,
-    estimate_number,
-    project_name,
-    floor_area,
-    location,
-    client_name,
-    status,
-    ocm_overhead,
-    ocm_contingency,
-    ocm_misc,
-    ocm_profit,
-    vat_rate,
-    vat_type,
-    created_at,
-    updated_at
-  ) VALUES (
-    org_id,
-    proj_id,
-    'EST-2026-001',
-    'Westlake Residence - Construction Estimate',
-    250.00,
-    'Westlake, Cape Town, South Africa',
-    'Mr. & Mrs. Smith',
-    'approved',
-    5.00,
-    5.00,
-    3.00,
-    10.00,
-    12.00,
-    'exclusive',
-    NOW(),
-    NOW()
-  ) RETURNING id INTO est_id;
+  -- Check if estimate already exists
+  SELECT id INTO est_id
+  FROM estimates
+  WHERE organization_id = org_id
+  AND estimate_number = 'EST-2026-001'
+  LIMIT 1;
 
-  -- Insert BOQ items for the estimate
+  -- Create an estimate for this project only if it doesn't exist
+  IF est_id IS NULL THEN
+    INSERT INTO estimates (
+      organization_id,
+      project_id,
+      estimate_number,
+      project_name,
+      floor_area,
+      location,
+      client_name,
+      status,
+      ocm_overhead,
+      ocm_contingency,
+      ocm_misc,
+      ocm_profit,
+      vat_rate,
+      vat_type,
+      created_at,
+      updated_at
+    ) VALUES (
+      org_id,
+      proj_id,
+      'EST-2026-001',
+      'Westlake Residence - Construction Estimate',
+      250.00,
+      'Westlake, Cape Town, South Africa',
+      'Mr. & Mrs. Smith',
+      'approved',
+      5.00,
+      5.00,
+      3.00,
+      10.00,
+      12.00,
+      'exclusive',
+      NOW(),
+      NOW()
+    ) RETURNING id INTO est_id;
+  END IF;
+
+  -- Insert BOQ items for the estimate (only if estimate was just created)
+  IF est_id IS NOT NULL THEN
   -- 1. Excavation
   INSERT INTO boq_items (
     estimate_id,
@@ -234,6 +244,8 @@ BEGIN
 
   -- Blockwork - Not started yet (0%)
   -- No entries
+
+  END IF; -- End of IF est_id IS NOT NULL
 
   RAISE NOTICE 'Progress data seeded successfully for Westlake Residence project';
   RAISE NOTICE 'Project ID: %', proj_id;
