@@ -31,7 +31,29 @@ npm install
 3. Paste and execute the schema
 4. Copy and run `002_rls_policies.sql`
 5. Copy and run `003_seed_data.sql` (after replacing `{{ORG_ID}}`)
-6. **Important:** Run `014_create_storage_buckets.sql` to set up file upload buckets
+6. Run migrations 004-014 in order (see Migration List below)
+7. **Important:** Run `015_consolidate_inventory_schema.sql` to fix schema conflicts
+8. **Important:** Run `016_add_unique_constraints.sql` for data integrity
+9. **Important:** Run `017_add_missing_indexes.sql` for performance
+
+**Migration List (run in order):**
+- 001: Initial schema (42 tables)
+- 002: RLS policies
+- 003: Seed data (NCR materials/labor/equipment)
+- 004: Assembly components
+- 005: Comprehensive enhancements (rebar, formwork, calculators)
+- 006: Project-first architecture
+- 007: Documents table
+- 008: Schedule enhancements
+- 009: WBS and phases
+- 010: Seed residential project
+- 011: Inventory system
+- 012: Seed inventory data
+- 013: Seed progress data
+- 014: Storage buckets
+- **015: Consolidate inventory schema (FIX)**
+- **016: Add unique constraints (ENHANCEMENT)**
+- **017: Add missing indexes (PERFORMANCE)**
 
 **Storage Buckets Required:**
 - `progress-photos`: For progress monitoring photo uploads (10 MB per file limit)
@@ -208,6 +230,13 @@ npm run build
 ```
 Output will be in `dist/` folder - deploy to any static hosting (Vercel, Netlify, etc.)
 
+**Performance Optimizations:**
+- ✅ Lazy loading implemented for all routes
+- ✅ Code-splitting: Main bundle ~467 KB (down from 1,370 KB)
+- ✅ Heavy components loaded on-demand (calculators, charts, editors)
+- ✅ Initial page load: 140 KB gzipped (main bundle + CSS)
+- ✅ Database indexes optimized for common queries
+
 ### Electron Desktop App
 ```bash
 npm run electron:build
@@ -234,9 +263,12 @@ Use Supabase Dashboard > Database > Backups (automated daily)
 - Schedule Management (Gantt charts, WBS, phases)
 - Inventory Management (warehouses, materials, stock levels, movements)
 - Progress Monitoring (S-curves, earned value, BOQ tracking, photo documentation)
+- **Global Search (Ctrl+K/⌘K) across all modules**
 - Currency utilities (₱ formatting)
 - Offline caching (IndexedDB)
 - Responsive UI
+- **Performance optimizations (lazy loading, code-splitting)**
+- **Database optimizations (unique constraints, indexes)**
 
 🚧 **Planned (Placeholders Created):**
 - Manpower Management (full features)
@@ -295,6 +327,18 @@ Extend `materials`, `labor_types`, `equipment` categories in seed data
 - Verify buckets exist: `progress-photos` and `documents`
 - Check RLS policies are applied to storage.objects
 - Ensure user is authenticated before uploading
+
+### Slow Performance
+- Ensure all 17 migrations have been run (especially 015-017)
+- Check browser network tab for slow API calls
+- Migration 017 adds critical indexes for query performance
+- Clear browser cache if experiencing stale data issues
+
+### Duplicate Data Errors
+- If seeing "unique constraint violation" errors after upgrade
+- This is expected - migration 016 adds data integrity constraints
+- Review and remove duplicate estimate numbers, bar marks, or template names
+- Constraints ensure data quality going forward
 
 ## 12. Next Steps
 
