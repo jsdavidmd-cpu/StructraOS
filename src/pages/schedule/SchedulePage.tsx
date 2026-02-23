@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/authStore';
 import { scheduleService, type CrewOption, type ScheduleTask, type ScheduleTaskInput } from '@/services/scheduleService';
-import { CalendarDays, Save, Trash2, Workflow, Target, RefreshCw, ArrowUp, ArrowDown } from 'lucide-react';
+import { CalendarDays, Save, Trash2, Workflow, Target, RefreshCw, ArrowUp, ArrowDown, ChevronRight, ChevronDown } from 'lucide-react';
 
 type FormState = {
   task_name: string;
@@ -159,6 +159,7 @@ export default function SchedulePage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [phaseFilter, setPhaseFilter] = useState('');
   const [showCriticalOnly, setShowCriticalOnly] = useState(false);
+  const [expandedParents, setExpandedParents] = useState<Record<string, boolean>>({});
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -218,6 +219,55 @@ export default function SchedulePage() {
       .map(([phase, phaseTasks]) => [phase, phaseTasks.sort((a, b) => a.sort_order - b.sort_order)] as const)
       .sort((a, b) => a[0].localeCompare(b[0]));
   }, [filteredTasks]);
+
+  useEffect(() => {
+    const childCounts: Record<string, number> = {};
+    filteredTasks.forEach((task) => {
+      if (!task.parent_task_id) return;
+      childCounts[task.parent_task_id] = (childCounts[task.parent_task_id] ?? 0) + 1;
+    });
+
+    setExpandedParents((prev) => {
+      const next = { ...prev };
+      Object.keys(childCounts).forEach((taskId) => {
+        if (next[taskId] === undefined) next[taskId] = true;
+      });
+      return next;
+    });
+  }, [filteredTasks]);
+
+  const groupedTreeRows = useMemo(() => {
+    return groupedTasks.map(([phase, phaseTasks]) => {
+      const taskMap = new Map(phaseTasks.map((task) => [task.id, task]));
+      const childMap = new Map<string, ScheduleTask[]>();
+
+      phaseTasks.forEach((task) => {
+        if (!task.parent_task_id || !taskMap.has(task.parent_task_id)) return;
+        if (!childMap.has(task.parent_task_id)) childMap.set(task.parent_task_id, []);
+        childMap.get(task.parent_task_id)!.push(task);
+      });
+
+      childMap.forEach((children) => children.sort((a, b) => a.sort_order - b.sort_order));
+
+      const roots = phaseTasks
+        .filter((task) => !task.parent_task_id || !taskMap.has(task.parent_task_id))
+        .sort((a, b) => a.sort_order - b.sort_order);
+
+      const rows: Array<{ task: ScheduleTask; depth: number; hasChildren: boolean }> = [];
+
+      const visit = (task: ScheduleTask, depth: number) => {
+        const children = childMap.get(task.id) ?? [];
+        const hasChildren = children.length > 0;
+        rows.push({ task, depth, hasChildren });
+        if (!hasChildren) return;
+        if (expandedParents[task.id] === false) return;
+        children.forEach((child) => visit(child, depth + 1));
+      };
+
+      roots.forEach((rootTask) => visit(rootTask, 0));
+      return [phase, rows] as const;
+    });
+  }, [groupedTasks, expandedParents]);
 
   const summary = useMemo(() => {
     const total = tasks.length;
@@ -345,13 +395,16 @@ export default function SchedulePage() {
       setSuccess('');
 
       if (activeTaskId) {
-        const updated = await scheduleService.updateTask(activeTaskId, payload);
-        setTasks((prev) => prev.map((task) => (task.id === updated.id ? updated : task)));
+        await scheduleService.updateTask(activeTaskId, payload);
         setSuccess('Task updated successfully.');
       } else {
-        const created = await scheduleService.createTask(payload);
-        setTasks((prev) => [...prev, created].sort((a, b) => a.sort_order - b.sort_order));
+        await scheduleService.createTask(payload);
         setSuccess('Task created successfully.');
+      }
+
+      if (projectId) {
+        await scheduleService.rollupParentProgress(projectId);
+        await loadData();
       }
 
       resetEditor();
@@ -366,7 +419,10 @@ export default function SchedulePage() {
     if (!window.confirm('Delete this task?')) return;
     try {
       await scheduleService.deleteTask(taskId);
-      setTasks((prev) => prev.filter((task) => task.id !== taskId));
+      if (projectId) {
+        await scheduleService.rollupParentProgress(projectId);
+        await loadData();
+      }
       if (activeTaskId === taskId) resetEditor();
       setSuccess('Task deleted successfully.');
     } catch (err: any) {
@@ -380,6 +436,7 @@ export default function SchedulePage() {
       setSaving(true);
       const inserted = await scheduleService.generateTasksFromBOQ(projectId, user.id);
       setSuccess(inserted > 0 ? `${inserted} task(s) generated from latest BOQ.` : 'No new BOQ tasks to generate.');
+      await scheduleService.rollupParentProgress(projectId);
       await loadData();
     } catch (err: any) {
       setError(err.message || 'Failed to generate tasks from BOQ');
@@ -422,6 +479,10 @@ export default function SchedulePage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleExpanded = (taskId: string) => {
+    setExpandedParents((prev) => ({ ...prev, [taskId]: prev[taskId] === false }));
   };
 
   if (!projectId) {
@@ -589,13 +650,22 @@ export default function SchedulePage() {
                   <div className="col-span-2">Dates</div>
                   <div className="col-span-2 text-right">Actions</div>
                 </div>
-                {groupedTasks.map(([phase, phaseTasks]) => (
+                {groupedTreeRows.map(([phase, rows]) => (
                   <div key={phase}>
                     <div className="px-3 py-2 border-t bg-muted/20 text-xs font-semibold uppercase tracking-wide">{phase}</div>
-                    {phaseTasks.map((task) => (
+                    {rows.map(({ task, depth, hasChildren }) => (
                       <div key={task.id} className="grid grid-cols-12 px-3 py-2 border-t text-sm items-center">
                         <div className="col-span-4 min-w-0">
-                          <p className={`font-medium truncate ${criticalPathIds.has(task.id) ? 'text-amber-600' : ''}`}>{task.wbs_code ? `${task.wbs_code} · ` : ''}{task.task_name}</p>
+                          <div className="flex items-center gap-1 min-w-0" style={{ marginLeft: `${depth * 14}px` }}>
+                            {hasChildren ? (
+                              <button type="button" className="p-0.5 rounded hover:bg-accent" onClick={() => toggleExpanded(task.id)}>
+                                {expandedParents[task.id] === false ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                              </button>
+                            ) : (
+                              <span className="inline-block w-4" />
+                            )}
+                            <p className={`font-medium truncate ${criticalPathIds.has(task.id) ? 'text-amber-600' : ''}`}>{task.wbs_code ? `${task.wbs_code} · ` : ''}{task.task_name}</p>
+                          </div>
                           <p className="text-xs text-muted-foreground truncate">{task.predecessor_ids.length} predecessor(s) • {task.priority}</p>
                         </div>
                         <div className="col-span-2">{task.status.replace('_', ' ')}</div>

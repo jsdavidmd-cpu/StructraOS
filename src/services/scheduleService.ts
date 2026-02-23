@@ -232,4 +232,107 @@ export const scheduleService = {
     const failed = results.find((result: any) => result.error);
     if (failed?.error) throw failed.error;
   },
+
+  async rollupParentProgress(projectId: string): Promise<void> {
+    const tasks = await this.getTasks(projectId);
+    const byParent = new Map<string, ScheduleTask[]>();
+
+    tasks.forEach((task) => {
+      if (!task.parent_task_id) return;
+      if (!byParent.has(task.parent_task_id)) byParent.set(task.parent_task_id, []);
+      byParent.get(task.parent_task_id)!.push(task);
+    });
+
+    if (byParent.size === 0) return;
+
+    const taskMap = new Map(tasks.map((task) => [task.id, task]));
+    const parentIds = Array.from(byParent.keys());
+
+    const computeRollup = (parentId: string, guard = new Set<string>()): { percent: number; qtyCompleted: number; qtyPlanned: number } => {
+      if (guard.has(parentId)) {
+        return { percent: 0, qtyCompleted: 0, qtyPlanned: 0 };
+      }
+
+      guard.add(parentId);
+      const children = byParent.get(parentId) ?? [];
+      if (children.length === 0) return { percent: 0, qtyCompleted: 0, qtyPlanned: 0 };
+
+      let weightedPercentTotal = 0;
+      let weightTotal = 0;
+      let qtyCompleted = 0;
+      let qtyPlanned = 0;
+
+      children.forEach((child) => {
+        const childRollup = byParent.has(child.id)
+          ? computeRollup(child.id, new Set(guard))
+          : {
+              percent: child.percent_complete ?? 0,
+              qtyCompleted: Number(child.qty_completed ?? 0),
+              qtyPlanned: Number(child.qty_planned ?? 0),
+            };
+
+        const weight = childRollup.qtyPlanned > 0 ? childRollup.qtyPlanned : 1;
+        weightedPercentTotal += childRollup.percent * weight;
+        weightTotal += weight;
+        qtyCompleted += childRollup.qtyCompleted;
+        qtyPlanned += childRollup.qtyPlanned;
+      });
+
+      const percent = weightTotal > 0 ? weightedPercentTotal / weightTotal : 0;
+      return { percent, qtyCompleted, qtyPlanned };
+    };
+
+    const updates = parentIds
+      .map((parentId) => {
+        const parent = taskMap.get(parentId);
+        if (!parent) return null;
+
+        const rollup = computeRollup(parentId);
+        const roundedPercent = Math.max(0, Math.min(100, Math.round(rollup.percent * 100) / 100));
+        const nextStatus: ScheduleTask['status'] = roundedPercent >= 100
+          ? 'completed'
+          : roundedPercent > 0
+            ? 'in_progress'
+            : 'not_started';
+
+        const currentPercent = Number(parent.percent_complete ?? 0);
+        const currentQtyCompleted = Number(parent.qty_completed ?? 0);
+        const currentQtyPlanned = Number(parent.qty_planned ?? 0);
+
+        const changed =
+          Math.abs(currentPercent - roundedPercent) > 0.001 ||
+          Math.abs(currentQtyCompleted - rollup.qtyCompleted) > 0.001 ||
+          Math.abs(currentQtyPlanned - rollup.qtyPlanned) > 0.001 ||
+          parent.status !== nextStatus;
+
+        if (!changed) return null;
+
+        return {
+          id: parentId,
+          percent_complete: roundedPercent,
+          qty_completed: rollup.qtyCompleted,
+          qty_planned: rollup.qtyPlanned,
+          status: nextStatus,
+        };
+      })
+      .filter(Boolean) as Array<{ id: string; percent_complete: number; qty_completed: number; qty_planned: number; status: ScheduleTask['status'] }>;
+
+    if (updates.length === 0) return;
+
+    const operations = updates.map((item) =>
+      (supabase.from('tasks') as any)
+        .update({
+          percent_complete: item.percent_complete,
+          qty_completed: item.qty_completed,
+          qty_planned: item.qty_planned,
+          status: item.status,
+        })
+        .eq('project_id', projectId)
+        .eq('id', item.id)
+    );
+
+    const results = await Promise.all(operations);
+    const failed = results.find((result: any) => result.error);
+    if (failed?.error) throw failed.error;
+  },
 };
