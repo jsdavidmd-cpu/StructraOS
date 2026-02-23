@@ -1010,6 +1010,14 @@ export default function SchedulePage() {
     }, 250);
   };
 
+  const exportAllAnalytics = () => {
+    exportPhaseSlippage();
+    exportWeeklySlippage();
+    setTimeout(() => {
+      exportAnalyticsPdfSnapshot();
+    }, 200);
+  };
+
   if (!projectId) {
     return (
       <div className="space-y-4">
@@ -1030,6 +1038,10 @@ export default function SchedulePage() {
           <Button variant="outline" onClick={() => void generateFromBoq()} disabled={saving}>
             <Workflow className="h-4 w-4 mr-2" />
             Generate from BOQ
+          </Button>
+          <Button variant="outline" onClick={exportAllAnalytics}>
+            <Download className="h-4 w-4 mr-2" />
+            Export All
           </Button>
           <Button variant="outline" onClick={exportAnalyticsPdfSnapshot}>
             <Download className="h-4 w-4 mr-2" />
