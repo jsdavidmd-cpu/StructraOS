@@ -201,7 +201,11 @@ Use Supabase Dashboard > Database > Backups (automated daily)
 ✅ **Implemented:**
 - Authentication & Authorization
 - Dashboard with stats
+- Projects (Project-first architecture)
 - Estimator with BOQ (full CRUD)
+- Schedule Management (Gantt charts, WBS, phases)
+- Inventory Management (warehouses, materials, stock levels, movements)
+- Progress Monitoring (S-curves, earned value, BOQ tracking, photo documentation)
 - Currency utilities (₱ formatting)
 - Offline caching (IndexedDB)
 - Responsive UI
@@ -210,11 +214,9 @@ Use Supabase Dashboard > Database > Backups (automated daily)
 - Manpower Management (full features)
 - Daily Attendance
 - Construction Daily Logbook (PDF generation)
-- Inventory Management
-- Project Scheduling (Gantt)
-- Progress Monitoring
-- Cost Control
+- Cost Control (budget vs actual)
 - Document Management
+- Purchase Orders & Procurement
 
 ## 10. Customization
 
