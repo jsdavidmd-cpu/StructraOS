@@ -167,6 +167,10 @@ export default function SchedulePage() {
   const [bulkPhase, setBulkPhase] = useState('');
   const [bulkStatus, setBulkStatus] = useState<FormState['status']>('not_started');
   const [bulkPriority, setBulkPriority] = useState<FormState['priority']>('medium');
+  const [bulkShiftDays, setBulkShiftDays] = useState('0');
+  const [bulkShiftPlanned, setBulkShiftPlanned] = useState(true);
+  const [bulkShiftForecast, setBulkShiftForecast] = useState(false);
+  const [bulkShiftActual, setBulkShiftActual] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -682,6 +686,42 @@ export default function SchedulePage() {
     }
   };
 
+  const applyDateShiftToSelected = async () => {
+    if (!projectId) return;
+    if (selectedTaskIds.length === 0) {
+      setError('Select at least one task.');
+      return;
+    }
+
+    const dayOffset = Number(bulkShiftDays);
+    if (!Number.isFinite(dayOffset) || dayOffset === 0) {
+      setError('Enter a non-zero day offset (e.g., 3 or -2).');
+      return;
+    }
+
+    if (!bulkShiftPlanned && !bulkShiftForecast && !bulkShiftActual) {
+      setError('Select at least one date set (planned, forecast, or actual).');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError('');
+      const shifted = await scheduleService.bulkShiftTaskDates(projectId, selectedTaskIds, dayOffset, {
+        planned: bulkShiftPlanned,
+        forecast: bulkShiftForecast,
+        actual: bulkShiftActual,
+      });
+      await loadData();
+      setSuccess(`Shifted dates for ${shifted} task(s) by ${dayOffset > 0 ? '+' : ''}${dayOffset} day(s).`);
+      setSelectedTaskIds([]);
+    } catch (err: any) {
+      setError(err.message || 'Failed to shift dates for selected tasks');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!projectId) {
     return (
       <div className="space-y-4">
@@ -864,6 +904,15 @@ export default function SchedulePage() {
                 {priorityOptions.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
               <Button onClick={() => void applyPriorityToSelected()} disabled={saving || selectedTaskIds.length === 0}>Apply Priority to Selected</Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
+              <Input placeholder="Shift days (e.g., +3, -2)" value={bulkShiftDays} onChange={(e) => setBulkShiftDays(e.target.value)} />
+              <label className="flex items-center gap-2 text-sm border rounded-md px-3 py-2"><input type="checkbox" checked={bulkShiftPlanned} onChange={(e) => setBulkShiftPlanned(e.target.checked)} />Planned</label>
+              <label className="flex items-center gap-2 text-sm border rounded-md px-3 py-2"><input type="checkbox" checked={bulkShiftForecast} onChange={(e) => setBulkShiftForecast(e.target.checked)} />Forecast</label>
+              <label className="flex items-center gap-2 text-sm border rounded-md px-3 py-2"><input type="checkbox" checked={bulkShiftActual} onChange={(e) => setBulkShiftActual(e.target.checked)} />Actual</label>
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={() => void applyDateShiftToSelected()} disabled={saving || selectedTaskIds.length === 0}>Shift Dates for Selected</Button>
             </div>
             <p className="text-xs text-muted-foreground">Drag to reorder. Drop on the right side of a row to nest as child task.</p>
 

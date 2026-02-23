@@ -92,6 +92,14 @@ const daysBetween = (startDate?: string | null, endDate?: string | null) => {
   return Math.max(diff, 1);
 };
 
+const shiftDate = (value: string | null | undefined, dayOffset: number) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  date.setDate(date.getDate() + dayOffset);
+  return date.toISOString().slice(0, 10);
+};
+
 export const scheduleService = {
   async getTasks(projectId: string): Promise<ScheduleTask[]> {
     const { data, error } = await (supabase.from('tasks') as any)
@@ -364,6 +372,53 @@ export const scheduleService = {
     if (failed?.error) throw failed.error;
 
     return taskIds.length;
+  },
+
+  async bulkShiftTaskDates(
+    projectId: string,
+    taskIds: string[],
+    dayOffset: number,
+    options?: { planned?: boolean; forecast?: boolean; actual?: boolean }
+  ): Promise<number> {
+    if (taskIds.length === 0 || dayOffset === 0) return 0;
+
+    const tasks = await this.getTasks(projectId);
+    const targets = tasks.filter((task) => taskIds.includes(task.id));
+    if (targets.length === 0) return 0;
+
+    const applyPlanned = options?.planned ?? true;
+    const applyForecast = options?.forecast ?? false;
+    const applyActual = options?.actual ?? false;
+
+    const operations = targets.map((task) => {
+      const payload: any = {};
+
+      if (applyPlanned) {
+        payload.planned_start = shiftDate(task.planned_start, dayOffset);
+        payload.planned_end = shiftDate(task.planned_end, dayOffset);
+      }
+
+      if (applyForecast) {
+        payload.forecast_start = shiftDate(task.forecast_start, dayOffset);
+        payload.forecast_end = shiftDate(task.forecast_end, dayOffset);
+      }
+
+      if (applyActual) {
+        payload.actual_start = shiftDate(task.actual_start, dayOffset);
+        payload.actual_end = shiftDate(task.actual_end, dayOffset);
+      }
+
+      return (supabase.from('tasks') as any)
+        .update(payload)
+        .eq('project_id', projectId)
+        .eq('id', task.id);
+    });
+
+    const results = await Promise.all(operations);
+    const failed = results.find((result: any) => result.error);
+    if (failed?.error) throw failed.error;
+
+    return targets.length;
   },
 
   async rollupParentProgress(projectId: string): Promise<void> {
