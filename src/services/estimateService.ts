@@ -175,6 +175,49 @@ export const estimateService = {
       .insert(itemsToInsert);
 
     if (error) throw error;
+
+    // Now fetch the saved items with their calculated amounts and update estimate totals
+    const { data: savedItems } = await supabase
+      .from('boq_items')
+      .select('*')
+      .eq('estimate_id', estimateId);
+
+    // Get the estimate to access OCM and VAT settings
+    const { data: estimate } = await supabase
+      .from('estimates')
+      .select('*')
+      .eq('id', estimateId)
+      .single();
+
+    if (savedItems && estimate) {
+      // Calculate direct cost (sum of amounts)
+      const directCost = (savedItems as any[]).reduce((sum, item) => sum + (item.amount || 0), 0);
+
+      // Apply OCM markups
+      const overhead = (directCost * (estimate.ocm_overhead || 0)) / 100;
+      const contingency = (directCost * (estimate.ocm_contingency || 0)) / 100;
+      const misc = (directCost * (estimate.ocm_misc || 0)) / 100;
+      const subtotal = directCost + overhead + contingency + misc;
+
+      const profit = (subtotal * (estimate.ocm_profit || 0)) / 100;
+      const subtotalWithProfit = subtotal + profit;
+
+      // Apply VAT
+      const vatRate = estimate.vat_rate || 12;
+      const vat = (subtotalWithProfit * vatRate) / 100;
+      const totalAmount = subtotalWithProfit + vat;
+
+      // Update estimate with new totals
+      await supabase
+        .from('estimates')
+        .update({
+          subtotal: subtotal,
+          total_amount: totalAmount,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', estimateId);
+    }
+
     return data;
   },
 
