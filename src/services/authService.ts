@@ -127,40 +127,100 @@ export const authService = {
     return data;
   },
 
+  // Create dev account (development only)
+  async createDevAccount() {
+    const devEmail = 'dev@structra.local';
+    const devPassword = 'password123';
+    const devName = 'Dev User';
+
+    try {
+      console.log('Creating dev account...');
+      
+      const { data, error } = await supabase.auth.signUp({
+        email: devEmail,
+        password: devPassword,
+        options: {
+          data: {
+            full_name: devName,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      console.log('Dev account created, user:', data.user?.id);
+      
+      // Create profile
+      if (data.user?.id) {
+        const { error: profileError } = await (supabase
+          .from('profiles') as any)
+          .insert({
+            id: data.user.id,
+            email: devEmail,
+            full_name: devName,
+            role: 'admin',
+            organization_id: '795acdd9-9a69-4699-aaee-2787f7babce0',
+          });
+
+        if (profileError && !profileError.message?.includes('duplicate')) {
+          console.error('Profile creation error:', profileError);
+          throw profileError;
+        }
+      }
+
+      return data;
+    } catch (err: any) {
+      console.error('Error creating dev account:', err);
+      throw err;
+    }
+  },
+
   // Temporary sign in (development only)
   async temporarySignIn() {
-    // For development: ensure dev account exists and sign in
+    // For development: simple direct login attempt
     const devEmail = 'dev@structra.local';
     const devPassword = 'password123';
 
     try {
-      console.log('Starting temporary dev login...');
+      console.log('Dev login: attempting sign in...');
       
-      // First, call the dev-login-setup function to create/verify dev account
-      console.log('Setting up dev account...');
-      const setupResponse = await supabase.functions.invoke('dev-login-setup', {
-        body: {},
-      });
-
-      if (!setupResponse) {
-        throw new Error('No response from dev-login-setup function');
-      }
-
-      console.log('Dev account setup complete:', setupResponse);
-
-      // Now sign in with dev credentials
-      console.log('Signing in with dev credentials...');
+      // Attempt direct sign-in
       const { data, error } = await supabase.auth.signInWithPassword({
         email: devEmail,
         password: devPassword,
       });
 
       if (error) {
-        console.error('Sign in error:', error);
+        console.error('Dev sign-in failed:', error.message);
+        
+        // Try to create the account if it doesn't exist
+        if (error.message?.includes('Invalid login credentials')) {
+          console.log('Dev account not found, attempting to create...');
+          try {
+            await this.createDevAccount();
+            console.log('Dev account created, retrying sign-in...');
+            
+            // Try sign-in again
+            const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
+              email: devEmail,
+              password: devPassword,
+            });
+            
+            if (retryError) throw retryError;
+            
+            if (retryData.user) {
+              await this.loadProfile(retryData.user);
+            }
+            return retryData;
+          } catch (createErr: any) {
+            throw new Error(`Failed to create dev account: ${createErr.message}`);
+          }
+        }
+        
         throw error;
       }
 
-      console.log('Successfully signed in, loading profile...');
+      console.log('Dev login: sign-in successful, loading profile...');
       if (data.user) {
         await this.loadProfile(data.user);
       }
@@ -169,11 +229,7 @@ export const authService = {
       return data;
     } catch (err: any) {
       console.error('Temporary login error:', err);
-      // Provide helpful error message
-      const errorDetails = err?.message || String(err) || 'Unknown error';
-      throw new Error(
-        `Dev login failed: ${errorDetails}`
-      );
+      throw new Error(err.message || 'Dev login failed');
     }
   },
 
