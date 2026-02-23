@@ -18,8 +18,8 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const devEmail = "devlogin@structra.dev";
-    const devPassword = "password123";
+    const devEmail = "jsdavidmd@gmail.com";
+    const devPassword = "test123";
     const devName = "Dev User";
     const defaultOrgId = "795acdd9-9a69-4699-aaee-2787f7babce0";
 
