@@ -28,6 +28,20 @@ export default function LoginPage() {
     }
   };
 
+  const handleTemporaryLogin = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      await authService.temporarySignIn();
+      navigate('/');
+    } catch (err: any) {
+      setError(err.message || 'Failed to sign in');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <Card className="w-full max-w-md">
@@ -90,6 +104,16 @@ export default function LoginPage() {
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => handleTemporaryLogin()}
+              disabled={loading}
+            >
+              Temporary Login (Dev)
             </Button>
 
             <div className="text-center text-sm">

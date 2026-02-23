@@ -129,7 +129,19 @@ export const authService = {
 
   // Temporary sign in (development only)
   async temporarySignIn() {
-    throw new Error('Temporary login is disabled. Please sign in with an administrator-created account.');
+    // For development: use a test account
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: 'dev@structra.local',
+      password: 'password123',
+    });
+
+    if (error) throw error;
+
+    if (data.user) {
+      await this.loadProfile(data.user);
+    }
+
+    return data;
   },
 
   // Sign out
