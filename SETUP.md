@@ -31,6 +31,13 @@ npm install
 3. Paste and execute the schema
 4. Copy and run `002_rls_policies.sql`
 5. Copy and run `003_seed_data.sql` (after replacing `{{ORG_ID}}`)
+6. **Important:** Run `014_create_storage_buckets.sql` to set up file upload buckets
+
+**Storage Buckets Required:**
+- `progress-photos`: For progress monitoring photo uploads
+- `documents`: For project document uploads
+
+The migration creates these buckets automatically with proper RLS policies.
 
 ### C. Create First Organization
 ```sql
@@ -255,6 +262,18 @@ Extend `materials`, `labor_types`, `equipment` categories in seed data
 - Verify Supabase project is active
 - Check auth URL redirect settings
 - Confirm user exists in Supabase Auth
+
+### Progress Monitoring Stuck Loading
+- Ensure project has at least one estimate created
+- Check that `014_create_storage_buckets.sql` migration was run
+- Verify storage buckets exist in Supabase Dashboard > Storage
+- If no estimate exists, create one for the project first
+
+### Photo/Document Upload Errors
+- Run migration `014_create_storage_buckets.sql` if not done
+- Verify buckets exist: `progress-photos` and `documents`
+- Check RLS policies are applied to storage.objects
+- Ensure user is authenticated before uploading
 
 ## 12. Next Steps
 
