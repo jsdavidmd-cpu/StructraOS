@@ -129,44 +129,20 @@ export const authService = {
 
   // Create dev account (development only)
   async createDevAccount() {
-    const devEmail = 'testuser@test.com';
-    const devPassword = 'password123';
-    const devName = 'Dev User';
+    const devEmail = 'devlogin@structra.dev';
 
     try {
       console.log('Creating dev account...');
-      
-      const { data, error } = await supabase.auth.signUp({
-        email: devEmail,
-        password: devPassword,
-        options: {
-          data: {
-            full_name: devName,
-          },
-        },
-      });
+
+      const { data, error } = await supabase.functions.invoke('dev-login-setup');
 
       if (error) throw error;
 
-      console.log('Dev account created, user:', data.user?.id);
-      
-      // Create profile
-      if (data.user?.id) {
-        const { error: profileError } = await (supabase
-          .from('profiles') as any)
-          .insert({
-            id: data.user.id,
-            email: devEmail,
-            full_name: devName,
-            role: 'admin',
-            organization_id: '795acdd9-9a69-4699-aaee-2787f7babce0',
-          });
-
-        if (profileError && !profileError.message?.includes('duplicate')) {
-          console.error('Profile creation error:', profileError);
-          throw profileError;
-        }
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to prepare dev account');
       }
+
+      console.log('Dev account ready:', devEmail);
 
       return data;
     } catch (err: any) {
@@ -178,7 +154,7 @@ export const authService = {
   // Temporary sign in (development only)
   async temporarySignIn() {
     // For development: simple direct login attempt
-    const devEmail = 'testuser@test.com';
+    const devEmail = 'devlogin@structra.dev';
     const devPassword = 'password123';
 
     try {

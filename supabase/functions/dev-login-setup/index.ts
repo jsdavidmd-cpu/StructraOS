@@ -5,9 +5,20 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-export async function POST(req: Request) {
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { status: 200 });
+  }
+
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ success: false, error: "Method not allowed" }), {
+      headers: { "Content-Type": "application/json" },
+      status: 405,
+    });
+  }
+
   try {
-    const devEmail = "dev@structra.local";
+    const devEmail = "devlogin@structra.dev";
     const devPassword = "password123";
     const devName = "Dev User";
     const defaultOrgId = "795acdd9-9a69-4699-aaee-2787f7babce0";
@@ -24,12 +35,23 @@ export async function POST(req: Request) {
       email_confirm: true,
     });
 
-    if (createError && createError.message?.includes("already registered")) {
-      // User already exists, try to find by email
+    if (createError && createError.message?.toLowerCase().includes("already")) {
       console.log("Dev user already exists, looking up...");
-      // We'll need to sign in or find the user another way
-      // For now, assume if user already exists, profile exists too
-      userId = "existing"; // Placeholder for existing user
+
+      const { data: listedUsers, error: listError } = await supabase.auth.admin.listUsers();
+      if (listError) {
+        throw new Error(`Failed to list users: ${listError.message}`);
+      }
+
+      const existingUser = listedUsers?.users?.find(
+        (user) => user.email?.toLowerCase() === devEmail.toLowerCase()
+      );
+
+      if (!existingUser?.id) {
+        throw new Error("Dev user exists but could not be resolved");
+      }
+
+      userId = existingUser.id;
     } else if (createError) {
       throw new Error(`Failed to create dev user: ${createError.message}`);
     } else if (authData?.user?.id) {
@@ -38,16 +60,13 @@ export async function POST(req: Request) {
       throw new Error("No user ID returned from auth creation");
     }
 
-    // If it's a new user (has actual userId), create profile
-    if (userId && userId !== "existing") {
-      // Check if profile exists
+    if (userId) {
       const { data: profile, error: selectError } = await supabase
         .from("profiles")
         .select("id")
         .eq("id", userId)
         .single();
 
-      // If profile doesn't exist, create it
       if (selectError?.code === "PGRST116" || !profile) {
         const { error: insertError } = await supabase
           .from("profiles")
@@ -70,6 +89,7 @@ export async function POST(req: Request) {
         success: true,
         message: "Dev account ready",
         email: devEmail,
+        user_id: userId,
       }),
       {
         headers: { "Content-Type": "application/json" },
@@ -91,4 +111,4 @@ export async function POST(req: Request) {
       }
     );
   }
-}
+});
