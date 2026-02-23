@@ -129,7 +129,7 @@ export const authService = {
 
   // Create dev account (development only)
   async createDevAccount() {
-    const devEmail = 'dev@structra.local';
+    const devEmail = 'dev@example.com';
     const devPassword = 'password123';
     const devName = 'Dev User';
 
@@ -178,7 +178,7 @@ export const authService = {
   // Temporary sign in (development only)
   async temporarySignIn() {
     // For development: simple direct login attempt
-    const devEmail = 'dev@structra.local';
+    const devEmail = 'dev@example.com';
     const devPassword = 'password123';
 
     try {

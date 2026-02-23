@@ -118,6 +118,8 @@ export default function LoginPage() {
 
             <div className="text-center text-sm">
               Account creation is restricted. Please contact your administrator.
+              <br />
+              <span className="text-xs text-muted-foreground mt-1 block">Dev: dev@example.com / password123</span>
             </div>
           </form>
         </CardContent>
