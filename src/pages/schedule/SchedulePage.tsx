@@ -163,6 +163,8 @@ export default function SchedulePage() {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
   const [dragOverPlacement, setDragOverPlacement] = useState<'before' | 'after' | 'child' | null>(null);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [bulkPhase, setBulkPhase] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -271,6 +273,11 @@ export default function SchedulePage() {
       return [phase, rows] as const;
     });
   }, [groupedTasks, expandedParents]);
+
+  useEffect(() => {
+    const visibleIds = new Set(filteredTasks.map((task) => task.id));
+    setSelectedTaskIds((prev) => prev.filter((id) => visibleIds.has(id)));
+  }, [filteredTasks]);
 
   const orderedTasks = useMemo(() => [...tasks].sort((a, b) => a.sort_order - b.sort_order), [tasks]);
 
@@ -581,6 +588,55 @@ export default function SchedulePage() {
     setExpandedParents((prev) => ({ ...prev, [taskId]: prev[taskId] === false }));
   };
 
+  const toggleTaskSelection = (taskId: string) => {
+    setSelectedTaskIds((prev) => (prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId]));
+  };
+
+  const selectVisibleTasks = () => {
+    setSelectedTaskIds(filteredTasks.map((task) => task.id));
+  };
+
+  const clearSelectedTasks = () => {
+    setSelectedTaskIds([]);
+  };
+
+  const applyPhaseToSelected = async () => {
+    if (!projectId) return;
+    if (!bulkPhase.trim()) {
+      setError('Enter a phase to apply.');
+      return;
+    }
+    if (selectedTaskIds.length === 0) {
+      setError('Select at least one task.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError('');
+      const appliedCount = await scheduleService.bulkUpdateTaskPhase(projectId, selectedTaskIds, bulkPhase.trim());
+
+      const shouldCascade = window.confirm('Also cascade this phase to descendants of selected parent tasks?');
+      let cascaded = 0;
+      if (shouldCascade) {
+        for (const taskId of selectedTaskIds) {
+          cascaded += await scheduleService.cascadeTaskPhase(projectId, taskId, bulkPhase.trim());
+        }
+      }
+
+      await scheduleService.renumberWbsCodes(projectId);
+      await scheduleService.rollupParentProgress(projectId);
+      await loadData();
+
+      setSuccess(`Applied phase to ${appliedCount} task(s)${cascaded > 0 ? ` and cascaded to ${cascaded} descendant task(s)` : ''}.`);
+      setSelectedTaskIds([]);
+    } catch (err: any) {
+      setError(err.message || 'Failed to apply phase to selected tasks');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!projectId) {
     return (
       <div className="space-y-4">
@@ -748,6 +804,12 @@ export default function SchedulePage() {
               </select>
               <label className="flex items-center gap-2 text-sm border rounded-md px-3 py-2"><input type="checkbox" checked={showCriticalOnly} onChange={(e) => setShowCriticalOnly(e.target.checked)} />Critical path only</label>
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
+              <Input placeholder="Phase for selected tasks" value={bulkPhase} onChange={(e) => setBulkPhase(e.target.value)} />
+              <Button variant="outline" onClick={selectVisibleTasks} disabled={loading || filteredTasks.length === 0}>Select Visible ({filteredTasks.length})</Button>
+              <Button variant="outline" onClick={clearSelectedTasks} disabled={selectedTaskIds.length === 0}>Clear Selection ({selectedTaskIds.length})</Button>
+              <Button onClick={() => void applyPhaseToSelected()} disabled={saving || selectedTaskIds.length === 0}>Apply Phase to Selected</Button>
+            </div>
             <p className="text-xs text-muted-foreground">Drag to reorder. Drop on the right side of a row to nest as child task.</p>
 
             {loading ? (
@@ -771,7 +833,14 @@ export default function SchedulePage() {
                         key={task.id}
                         className={`grid grid-cols-12 px-3 py-2 border-t text-sm items-center ${dragOverTaskId === task.id ? 'bg-accent/40' : ''} ${dragOverTaskId === task.id && dragOverPlacement === 'child' ? 'outline outline-1 outline-primary/50' : ''}`}
                         draggable
-                        onDragStart={() => setDraggedTaskId(task.id)}
+                        onDragStart={(e) => {
+                          const source = e.target as HTMLElement;
+                          if (source.closest('button,input,select,label')) {
+                            e.preventDefault();
+                            return;
+                          }
+                          setDraggedTaskId(task.id);
+                        }}
                         onDragEnd={() => {
                           setDraggedTaskId(null);
                           setDragOverTaskId(null);
@@ -803,6 +872,7 @@ export default function SchedulePage() {
                       >
                         <div className="col-span-4 min-w-0">
                           <div className="flex items-center gap-1 min-w-0" style={{ marginLeft: `${depth * 14}px` }}>
+                            <input type="checkbox" checked={selectedTaskIds.includes(task.id)} onChange={() => toggleTaskSelection(task.id)} />
                             <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
                             {hasChildren ? (
                               <button type="button" className="p-0.5 rounded hover:bg-accent" onClick={() => toggleExpanded(task.id)}>

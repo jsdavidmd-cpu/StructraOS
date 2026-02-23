@@ -328,6 +328,23 @@ export const scheduleService = {
     return targets.length;
   },
 
+  async bulkUpdateTaskPhase(projectId: string, taskIds: string[], phase: string): Promise<number> {
+    if (taskIds.length === 0) return 0;
+
+    const operations = taskIds.map((taskId) =>
+      (supabase.from('tasks') as any)
+        .update({ phase })
+        .eq('project_id', projectId)
+        .eq('id', taskId)
+    );
+
+    const results = await Promise.all(operations);
+    const failed = results.find((result: any) => result.error);
+    if (failed?.error) throw failed.error;
+
+    return taskIds.length;
+  },
+
   async rollupParentProgress(projectId: string): Promise<void> {
     const tasks = await this.getTasks(projectId);
     const byParent = new Map<string, ScheduleTask[]>();
