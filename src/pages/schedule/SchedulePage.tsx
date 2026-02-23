@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/authStore';
 import { scheduleService, type CrewOption, type ScheduleTask, type ScheduleTaskInput } from '@/services/scheduleService';
-import { CalendarDays, Save, Trash2, Workflow, Target, RefreshCw, ArrowUp, ArrowDown, ChevronRight, ChevronDown } from 'lucide-react';
+import { CalendarDays, Save, Trash2, Workflow, Target, RefreshCw, ChevronRight, ChevronDown, GripVertical } from 'lucide-react';
 
 type FormState = {
   task_name: string;
@@ -160,6 +160,8 @@ export default function SchedulePage() {
   const [phaseFilter, setPhaseFilter] = useState('');
   const [showCriticalOnly, setShowCriticalOnly] = useState(false);
   const [expandedParents, setExpandedParents] = useState<Record<string, boolean>>({});
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -268,6 +270,8 @@ export default function SchedulePage() {
       return [phase, rows] as const;
     });
   }, [groupedTasks, expandedParents]);
+
+  const orderedTasks = useMemo(() => [...tasks].sort((a, b) => a.sort_order - b.sort_order), [tasks]);
 
   const summary = useMemo(() => {
     const total = tasks.length;
@@ -459,25 +463,31 @@ export default function SchedulePage() {
     }
   };
 
-  const moveTask = async (taskId: string, direction: 'up' | 'down') => {
-    if (!projectId) return;
-    const ordered = [...tasks].sort((a, b) => a.sort_order - b.sort_order);
-    const index = ordered.findIndex((task) => task.id === taskId);
-    if (index === -1) return;
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= ordered.length) return;
+  const dropTask = async (targetTaskId: string, position: 'before' | 'after') => {
+    if (!projectId || !draggedTaskId || draggedTaskId === targetTaskId) return;
 
-    [ordered[index], ordered[targetIndex]] = [ordered[targetIndex], ordered[index]];
+    const working = [...orderedTasks];
+    const draggedIndex = working.findIndex((task) => task.id === draggedTaskId);
+    const targetIndex = working.findIndex((task) => task.id === targetTaskId);
+    if (draggedIndex < 0 || targetIndex < 0) return;
+
+    const [draggedTask] = working.splice(draggedIndex, 1);
+    let nextTargetIndex = working.findIndex((task) => task.id === targetTaskId);
+    if (nextTargetIndex < 0) nextTargetIndex = working.length;
+    const insertionIndex = position === 'before' ? nextTargetIndex : nextTargetIndex + 1;
+    working.splice(insertionIndex, 0, draggedTask);
 
     try {
       setSaving(true);
-      await scheduleService.resequenceTasks(projectId, ordered.map((task) => task.id));
-      setTasks(ordered.map((task, orderIndex) => ({ ...task, sort_order: orderIndex + 1 })));
-      setSuccess(`Task moved ${direction}.`);
+      await scheduleService.resequenceTasks(projectId, working.map((task) => task.id));
+      setTasks(working.map((task, index) => ({ ...task, sort_order: index + 1 })));
+      setSuccess('Task order updated.');
     } catch (err: any) {
       setError(err.message || 'Failed to reorder tasks');
     } finally {
       setSaving(false);
+      setDraggedTaskId(null);
+      setDragOverTaskId(null);
     }
   };
 
@@ -654,9 +664,29 @@ export default function SchedulePage() {
                   <div key={phase}>
                     <div className="px-3 py-2 border-t bg-muted/20 text-xs font-semibold uppercase tracking-wide">{phase}</div>
                     {rows.map(({ task, depth, hasChildren }) => (
-                      <div key={task.id} className="grid grid-cols-12 px-3 py-2 border-t text-sm items-center">
+                      <div
+                        key={task.id}
+                        className={`grid grid-cols-12 px-3 py-2 border-t text-sm items-center ${dragOverTaskId === task.id ? 'bg-accent/40' : ''}`}
+                        draggable
+                        onDragStart={() => setDraggedTaskId(task.id)}
+                        onDragEnd={() => {
+                          setDraggedTaskId(null);
+                          setDragOverTaskId(null);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOverTaskId(task.id);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                          const position = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+                          void dropTask(task.id, position);
+                        }}
+                      >
                         <div className="col-span-4 min-w-0">
                           <div className="flex items-center gap-1 min-w-0" style={{ marginLeft: `${depth * 14}px` }}>
+                            <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
                             {hasChildren ? (
                               <button type="button" className="p-0.5 rounded hover:bg-accent" onClick={() => toggleExpanded(task.id)}>
                                 {expandedParents[task.id] === false ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -672,8 +702,6 @@ export default function SchedulePage() {
                         <div className="col-span-2">{Math.round(task.percent_complete ?? 0)}%</div>
                         <div className="col-span-2 text-xs text-muted-foreground">{task.planned_start ? `${toIsoDate(task.planned_start)} → ${toIsoDate(task.planned_end)}` : 'No dates'}</div>
                         <div className="col-span-2 flex justify-end gap-2">
-                          <Button size="sm" variant="outline" onClick={() => void moveTask(task.id, 'up')}><ArrowUp className="h-4 w-4" /></Button>
-                          <Button size="sm" variant="outline" onClick={() => void moveTask(task.id, 'down')}><ArrowDown className="h-4 w-4" /></Button>
                           <Button size="sm" variant="outline" onClick={() => editTask(task)}>Edit</Button>
                           <Button size="sm" variant="outline" onClick={() => void removeTask(task.id)}><Trash2 className="h-4 w-4 text-red-600" /></Button>
                         </div>
