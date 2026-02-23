@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +21,7 @@ interface Template {
 }
 
 export default function TemplatesLibraryPage() {
+  const navigate = useNavigate();
   const profile = useAuthStore((state) => state.profile);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,7 +87,7 @@ export default function TemplatesLibraryPage() {
 
       // Insert template (you may need to adjust based on your actual table structure)
       const templateData = {
-        organization_id: profile.organization_id,
+        company_id: profile.organization_id,
         name: formData.name,
         orientation: formData.orientation,
         sector: formData.sector,
@@ -141,6 +143,20 @@ export default function TemplatesLibraryPage() {
       return matchesSearch && matchesOrientation && matchesSector;
     });
   }, [templates, searchTerm, filterOrientation, filterSector]);
+
+  const handleUseTemplate = (template: Template) => {
+    navigate('/projects/new', {
+      state: {
+        prefillTemplate: {
+          id: template.id,
+          name: template.name,
+          orientation: template.orientation,
+          sector: template.sector,
+          subtype: template.subtype,
+        },
+      },
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -324,7 +340,7 @@ export default function TemplatesLibraryPage() {
                       Created: {new Date(template.created_at).toLocaleDateString()}
                     </p>
                     <div className="flex gap-2 pt-2">
-                      <Button size="sm" variant="outline" className="flex-1">
+                      <Button size="sm" variant="outline" className="flex-1" onClick={() => handleUseTemplate(template)}>
                         <Copy className="h-3 w-3 mr-1" />
                         Use Template
                       </Button>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,7 @@ const steps = [
 
 export default function ProjectWizard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const profile = useAuthStore((state) => state.profile);
   const user = useAuthStore((state) => state.user);
 
@@ -43,6 +44,20 @@ export default function ProjectWizard() {
     create_initial_estimate: true,
     member_ids: [] as string[],
   });
+
+  useEffect(() => {
+    const prefill = (location.state as any)?.prefillTemplate;
+    if (!prefill) return;
+
+    setForm((prev) => ({
+      ...prev,
+      name: prev.name || prefill.name || '',
+      project_orientation: prefill.orientation || prev.project_orientation,
+      project_sector: prefill.sector || prev.project_sector,
+      project_subtype: prefill.subtype || prev.project_subtype,
+      template_id: prefill.id || prev.template_id,
+    }));
+  }, [location.state]);
 
   useEffect(() => {
     const loadSupportData = async () => {
