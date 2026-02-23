@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/authStore';
 import { scheduleService, type CrewOption, type ScheduleTask, type ScheduleTaskInput } from '@/services/scheduleService';
-import { CalendarDays, Save, Trash2, Workflow, Target, RefreshCw, ChevronRight, ChevronDown, GripVertical } from 'lucide-react';
+import { CalendarDays, Save, Trash2, Workflow, Target, RefreshCw, ChevronRight, ChevronDown, GripVertical, TrendingUp, Gauge } from 'lucide-react';
 
 type FormState = {
   task_name: string;
@@ -76,6 +76,14 @@ const computeDuration = (start?: string | null, end?: string | null) => {
   const endDate = new Date(end);
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return 0;
   return Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
+};
+
+const diffDays = (later?: string | null, earlier?: string | null) => {
+  if (!later || !earlier) return null;
+  const a = new Date(later);
+  const b = new Date(earlier);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
+  return Math.round((a.getTime() - b.getTime()) / 86400000);
 };
 
 const computeCriticalPath = (tasks: ScheduleTask[]) => {
@@ -331,6 +339,68 @@ export default function SchedulePage() {
     const end = sorted[sorted.length - 1];
     const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
     return { start, end, totalDays };
+  }, [tasks]);
+
+  const scheduleAnalytics = useMemo(() => {
+    const today = new Date();
+    const baselineTasks = tasks.filter((task) => task.baseline_start && task.baseline_end);
+
+    let plannedValue = 0;
+    let earnedValue = 0;
+
+    baselineTasks.forEach((task) => {
+      const weight = Number(task.qty_planned ?? 1);
+      const baselineStart = new Date(task.baseline_start!);
+      const baselineEnd = new Date(task.baseline_end!);
+      const durationDays = Math.max(1, Math.round((baselineEnd.getTime() - baselineStart.getTime()) / 86400000) + 1);
+      const elapsedDays = Math.round((today.getTime() - baselineStart.getTime()) / 86400000) + 1;
+      const plannedProgress = Math.max(0, Math.min(1, elapsedDays / durationDays));
+      const actualProgress = Math.max(0, Math.min(1, Number(task.percent_complete ?? 0) / 100));
+
+      plannedValue += weight * plannedProgress;
+      earnedValue += weight * actualProgress;
+    });
+
+    const spi = plannedValue > 0 ? earnedValue / plannedValue : 1;
+    const baselineCoverage = tasks.length > 0 ? Math.round((baselineTasks.length / tasks.length) * 100) : 0;
+
+    const byPhase = new Map<string, { count: number; totalSlip: number; delayed: number; ahead: number }>();
+
+    tasks.forEach((task) => {
+      const phase = task.phase || 'Unassigned';
+      const baselineEnd = task.baseline_end;
+      const comparisonEnd = task.actual_end || task.forecast_end || task.planned_end;
+      const slip = diffDays(comparisonEnd, baselineEnd);
+      if (slip === null) return;
+
+      if (!byPhase.has(phase)) {
+        byPhase.set(phase, { count: 0, totalSlip: 0, delayed: 0, ahead: 0 });
+      }
+
+      const phaseData = byPhase.get(phase)!;
+      phaseData.count += 1;
+      phaseData.totalSlip += slip;
+      if (slip > 0) phaseData.delayed += 1;
+      if (slip < 0) phaseData.ahead += 1;
+    });
+
+    const phaseSlippage = Array.from(byPhase.entries())
+      .map(([phase, stats]) => ({
+        phase,
+        avgSlip: Math.round((stats.totalSlip / Math.max(stats.count, 1)) * 10) / 10,
+        delayed: stats.delayed,
+        ahead: stats.ahead,
+        count: stats.count,
+      }))
+      .sort((a, b) => Math.abs(b.avgSlip) - Math.abs(a.avgSlip));
+
+    return {
+      spi: Math.round(spi * 100) / 100,
+      plannedValue: Math.round(plannedValue * 100) / 100,
+      earnedValue: Math.round(earnedValue * 100) / 100,
+      baselineCoverage,
+      phaseSlippage,
+    };
   }, [tasks]);
 
   const toPayload = (): ScheduleTaskInput | null => {
@@ -768,6 +838,64 @@ export default function SchedulePage() {
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Delayed</p><p className="text-2xl font-bold text-red-600">{summary.delayed}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Critical Tasks</p><p className="text-2xl font-bold text-amber-600">{summary.critical}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Avg Variance</p><p className="text-2xl font-bold">{summary.varianceDays}d</p></CardContent></Card>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Gauge className="h-4 w-4" />
+              <CardTitle className="text-base">SPI-Like Index</CardTitle>
+            </div>
+            <CardDescription>Schedule Performance based on earned vs planned progress from baselines.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className={`text-3xl font-bold ${scheduleAnalytics.spi < 1 ? 'text-red-600' : 'text-emerald-600'}`}>{scheduleAnalytics.spi.toFixed(2)}</p>
+            <p className="text-xs text-muted-foreground mt-1">{scheduleAnalytics.spi < 1 ? 'Behind baseline plan' : 'On or ahead of baseline plan'}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              <CardTitle className="text-base">Progress Value</CardTitle>
+            </div>
+            <CardDescription>Weighted planned and earned progress values.</CardDescription>
+          </CardHeader>
+          <CardContent className="text-sm space-y-1">
+            <p><span className="text-muted-foreground">Planned Value:</span> {scheduleAnalytics.plannedValue}</p>
+            <p><span className="text-muted-foreground">Earned Value:</span> {scheduleAnalytics.earnedValue}</p>
+            <p><span className="text-muted-foreground">Baseline Coverage:</span> {scheduleAnalytics.baselineCoverage}%</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Phase Slippage</CardTitle>
+            <CardDescription>Average slip in days vs baseline by phase.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {scheduleAnalytics.phaseSlippage.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No baseline slippage data yet.</p>
+            ) : (
+              scheduleAnalytics.phaseSlippage.slice(0, 5).map((item) => {
+                const magnitude = Math.min(100, Math.abs(item.avgSlip) * 8);
+                return (
+                  <div key={item.phase} className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-medium truncate max-w-[70%]">{item.phase}</span>
+                      <span className={item.avgSlip > 0 ? 'text-red-600' : item.avgSlip < 0 ? 'text-emerald-600' : 'text-muted-foreground'}>
+                        {item.avgSlip > 0 ? '+' : ''}{item.avgSlip}d
+                      </span>
+                    </div>
+                    <div className="h-2 rounded bg-muted overflow-hidden">
+                      <div className={`h-2 ${item.avgSlip > 0 ? 'bg-red-500' : item.avgSlip < 0 ? 'bg-emerald-500' : 'bg-slate-400'}`} style={{ width: `${magnitude}%` }} />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
