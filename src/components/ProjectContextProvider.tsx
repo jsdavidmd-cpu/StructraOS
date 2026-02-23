@@ -11,6 +11,9 @@ interface ProjectContextValue {
 
 const ProjectContext = createContext<ProjectContextValue | undefined>(undefined);
 
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
 export function ProjectContextProvider({ children }: { children: React.ReactNode }) {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeProject, setActiveProject] = useState<any | null>(null);
@@ -18,6 +21,11 @@ export function ProjectContextProvider({ children }: { children: React.ReactNode
 
   const refreshActiveProject = async () => {
     if (!activeProjectId) {
+      setActiveProject(null);
+      return;
+    }
+
+    if (!isUuid(activeProjectId)) {
       setActiveProject(null);
       return;
     }
