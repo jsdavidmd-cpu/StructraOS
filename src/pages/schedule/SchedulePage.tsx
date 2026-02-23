@@ -408,6 +408,7 @@ export default function SchedulePage() {
       }
 
       if (projectId) {
+        await scheduleService.renumberWbsCodes(projectId);
         await scheduleService.rollupParentProgress(projectId);
         await loadData();
       }
@@ -425,6 +426,7 @@ export default function SchedulePage() {
     try {
       await scheduleService.deleteTask(taskId);
       if (projectId) {
+        await scheduleService.renumberWbsCodes(projectId);
         await scheduleService.rollupParentProgress(projectId);
         await loadData();
       }
@@ -441,10 +443,25 @@ export default function SchedulePage() {
       setSaving(true);
       const inserted = await scheduleService.generateTasksFromBOQ(projectId, user.id);
       setSuccess(inserted > 0 ? `${inserted} task(s) generated from latest BOQ.` : 'No new BOQ tasks to generate.');
+      await scheduleService.renumberWbsCodes(projectId);
       await scheduleService.rollupParentProgress(projectId);
       await loadData();
     } catch (err: any) {
       setError(err.message || 'Failed to generate tasks from BOQ');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const renumberWbs = async () => {
+    if (!projectId) return;
+    try {
+      setSaving(true);
+      await scheduleService.renumberWbsCodes(projectId);
+      await loadData();
+      setSuccess('WBS codes renumbered.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to renumber WBS codes');
     } finally {
       setSaving(false);
     }
@@ -524,6 +541,7 @@ export default function SchedulePage() {
         });
       }
 
+      await scheduleService.renumberWbsCodes(projectId);
       await scheduleService.rollupParentProgress(projectId);
       await loadData();
       setSuccess(position === 'child' ? 'Task nested under selected parent.' : 'Task order updated.');
@@ -561,6 +579,10 @@ export default function SchedulePage() {
           <Button variant="outline" onClick={() => void generateFromBoq()} disabled={saving}>
             <Workflow className="h-4 w-4 mr-2" />
             Generate from BOQ
+          </Button>
+          <Button variant="outline" onClick={() => void renumberWbs()} disabled={saving}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Renumber WBS
           </Button>
           <Button variant="outline" onClick={() => void captureBaseline()} disabled={saving}>
             <Target className="h-4 w-4 mr-2" />

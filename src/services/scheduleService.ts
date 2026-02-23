@@ -233,6 +233,61 @@ export const scheduleService = {
     if (failed?.error) throw failed.error;
   },
 
+  async renumberWbsCodes(projectId: string): Promise<void> {
+    const tasks = await this.getTasks(projectId);
+    if (tasks.length === 0) return;
+
+    const taskMap = new Map(tasks.map((task) => [task.id, task]));
+    const childrenByParent = new Map<string, ScheduleTask[]>();
+
+    tasks.forEach((task) => {
+      if (!task.parent_task_id || !taskMap.has(task.parent_task_id)) return;
+      if (!childrenByParent.has(task.parent_task_id)) childrenByParent.set(task.parent_task_id, []);
+      childrenByParent.get(task.parent_task_id)!.push(task);
+    });
+
+    childrenByParent.forEach((children) => children.sort((a, b) => a.sort_order - b.sort_order));
+
+    const roots = tasks
+      .filter((task) => !task.parent_task_id || !taskMap.has(task.parent_task_id))
+      .sort((a, b) => a.sort_order - b.sort_order);
+
+    const updates: Array<{ id: string; wbs_code: string }> = [];
+    const visited = new Set<string>();
+
+    const assignCodes = (nodes: ScheduleTask[], prefix = '') => {
+      nodes.forEach((node, index) => {
+        const code = prefix ? `${prefix}.${index + 1}` : `${index + 1}`;
+        if ((node.wbs_code || '') !== code) {
+          updates.push({ id: node.id, wbs_code: code });
+        }
+        visited.add(node.id);
+        const children = childrenByParent.get(node.id) ?? [];
+        assignCodes(children, code);
+      });
+    };
+
+    assignCodes(roots);
+
+    const orphaned = tasks.filter((task) => !visited.has(task.id)).sort((a, b) => a.sort_order - b.sort_order);
+    if (orphaned.length > 0) {
+      assignCodes(orphaned, `${roots.length + 1}`);
+    }
+
+    if (updates.length === 0) return;
+
+    const operations = updates.map((update) =>
+      (supabase.from('tasks') as any)
+        .update({ wbs_code: update.wbs_code })
+        .eq('project_id', projectId)
+        .eq('id', update.id)
+    );
+
+    const results = await Promise.all(operations);
+    const failed = results.find((result: any) => result.error);
+    if (failed?.error) throw failed.error;
+  },
+
   async rollupParentProgress(projectId: string): Promise<void> {
     const tasks = await this.getTasks(projectId);
     const byParent = new Map<string, ScheduleTask[]>();
