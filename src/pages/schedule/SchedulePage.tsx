@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/authStore';
 import { scheduleService, type CrewOption, type ScheduleTask, type ScheduleTaskInput } from '@/services/scheduleService';
+import { projectService } from '@/services/projectService';
 import { CalendarDays, Save, Trash2, Workflow, Target, RefreshCw, ChevronRight, ChevronDown, GripVertical, TrendingUp, Gauge, Download } from 'lucide-react';
 
 type FormState = {
@@ -86,7 +87,19 @@ const diffDays = (later?: string | null, earlier?: string | null) => {
   return Math.round((a.getTime() - b.getTime()) / 86400000);
 };
 
-const exportCsv = (filename: string, headers: string[], rows: Array<Array<string | number>>) => {
+interface ExportMetadata {
+  projectName?: string;
+  exportedBy?: string;
+  exportedAt?: Date;
+  filters?: Record<string, string>;
+}
+
+const exportCsv = (
+  filename: string,
+  headers: string[],
+  rows: Array<Array<string | number>>,
+  metadata?: ExportMetadata
+) => {
   const escapeValue = (value: string | number) => {
     const str = String(value ?? '');
     if (str.includes(',') || str.includes('"') || str.includes('\n')) {
@@ -95,9 +108,27 @@ const exportCsv = (filename: string, headers: string[], rows: Array<Array<string
     return str;
   };
 
-  const content = [headers, ...rows]
-    .map((row) => row.map(escapeValue).join(','))
-    .join('\n');
+  let metadataLines: string[] = [];
+  if (metadata) {
+    metadataLines.push(`# Project: ${metadata.projectName || 'Unknown'}`);
+    metadataLines.push(`# Exported by: ${metadata.exportedBy || 'User'}`);
+    metadataLines.push(`# Exported at: ${(metadata.exportedAt || new Date()).toLocaleString()}`);
+    if (metadata.filters && Object.keys(metadata.filters).length > 0) {
+      const activeFilters = Object.entries(metadata.filters)
+        .filter(([, v]) => v && v !== '')
+        .map(([k, v]) => `${k}:${v}`);
+      if (activeFilters.length > 0) {
+        metadataLines.push(`# Filters: ${activeFilters.join(', ')}`);
+      }
+    }
+    metadataLines.push('');
+  }
+
+  const content =
+    metadataLines.join('\n') +
+    [headers, ...rows]
+      .map((row) => row.map(escapeValue).join(','))
+      .join('\n');
 
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -181,6 +212,7 @@ export default function SchedulePage() {
 
   const [tasks, setTasks] = useState<ScheduleTask[]>([]);
   const [crews, setCrews] = useState<CrewOption[]>([]);
+  const [projectName, setProjectName] = useState<string>('Project');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -213,12 +245,14 @@ export default function SchedulePage() {
     try {
       setLoading(true);
       setError('');
-      const [taskRows, crewRows] = await Promise.all([
+      const [taskRows, crewRows, projectData] = await Promise.all([
         scheduleService.getTasks(projectId),
         scheduleService.getCrews(profile.organization_id),
+        projectService.getProject(projectId),
       ]);
       setTasks(taskRows);
       setCrews(crewRows);
+      setProjectName(projectData?.name || 'Project');
     } catch (err: any) {
       console.error('Failed to load schedule data:', err);
       setError(err.message || 'Failed to load schedule data');
@@ -868,7 +902,17 @@ export default function SchedulePage() {
     exportCsv(
       `phase-slippage-${new Date().toISOString().slice(0, 10)}.csv`,
       ['Phase', 'Average Slip (days)', 'Delayed Tasks', 'Ahead Tasks', 'Sample Size'],
-      rows
+      rows,
+      {
+        projectName,
+        exportedBy: user?.email || 'Unknown User',
+        exportedAt: new Date(),
+        filters: {
+          ...(statusFilter && { status: statusFilter }),
+          ...(phaseFilter && { phase: phaseFilter }),
+          ...(showCriticalOnly && { view: 'Critical Path Only' }),
+        },
+      }
     );
   };
 
@@ -888,7 +932,17 @@ export default function SchedulePage() {
     exportCsv(
       `weekly-slippage-${new Date().toISOString().slice(0, 10)}.csv`,
       ['WBS', 'Task', 'Phase', 'Status', 'Slip Days', 'Severity', 'Baseline End', 'Current End', 'Updated At'],
-      rows
+      rows,
+      {
+        projectName,
+        exportedBy: user?.email || 'Unknown User',
+        exportedAt: new Date(),
+        filters: {
+          ...(statusFilter && { status: statusFilter }),
+          ...(phaseFilter && { phase: phaseFilter }),
+          ...(showCriticalOnly && { view: 'Critical Path Only' }),
+        },
+      }
     );
   };
 
@@ -925,6 +979,12 @@ export default function SchedulePage() {
       )
       .join('');
 
+    const activeFilters = [
+      statusFilter ? `Status: ${statusFilter}` : '',
+      phaseFilter ? `Phase: ${phaseFilter}` : '',
+      showCriticalOnly ? 'View: Critical Path Only' : '',
+    ].filter(Boolean);
+
     const html = `
       <!doctype html>
       <html>
@@ -934,7 +994,8 @@ export default function SchedulePage() {
         <style>
           body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
           h1 { font-size: 20px; margin-bottom: 4px; }
-          .meta { color: #555; font-size: 12px; margin-bottom: 18px; }
+          .meta { color: #777; font-size: 11px; line-height: 1.5; margin-bottom: 18px; padding: 8px; background: #f9f9f9; border-left: 3px solid #ddd; }
+          .meta-label { font-weight: 600; color: #555; }
           .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
           .card { border: 1px solid #ddd; border-radius: 8px; padding: 10px; }
           .label { font-size: 12px; color: #555; }
@@ -942,12 +1003,18 @@ export default function SchedulePage() {
           table { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 18px; }
           th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 12px; text-align: left; }
           th { background: #f5f5f5; }
+          .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 10px; color: #aaa; text-align: right; }
           @media print { body { margin: 12mm; } }
         </style>
       </head>
       <body>
         <h1>Schedule Analytics Snapshot</h1>
-        <div class="meta">Generated: ${new Date().toLocaleString()}</div>
+        <div class="meta">
+          <div><span class="meta-label">Project:</span> ${projectName}</div>
+          <div><span class="meta-label">Exported by:</span> ${user?.email || 'Unknown User'}</div>
+          <div><span class="meta-label">Generated:</span> ${new Date().toLocaleString()}</div>
+          ${activeFilters.length > 0 ? `<div><span class="meta-label">Active Filters:</span> ${activeFilters.join(', ')}</div>` : ''}
+        </div>
 
         <div class="grid">
           <div class="card"><div class="label">SPI-Like Index</div><div class="value">${scheduleAnalytics.spi.toFixed(2)}</div></div>
@@ -991,6 +1058,8 @@ export default function SchedulePage() {
             ${weeklyRows || '<tr><td colspan="9">No weekly slippage data</td></tr>'}
           </tbody>
         </table>
+
+        <div class="footer">Schedule module | Structra</div>
       </body>
       </html>
     `;
