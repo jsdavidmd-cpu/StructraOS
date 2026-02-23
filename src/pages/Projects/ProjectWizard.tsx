@@ -47,7 +47,10 @@ export default function ProjectWizard() {
 
   useEffect(() => {
     const prefill = (location.state as any)?.prefillTemplate;
-    if (!prefill) return;
+    if (!prefill) {
+      setStep(0);
+      return;
+    }
 
     setForm((prev) => ({
       ...prev,
@@ -59,7 +62,7 @@ export default function ProjectWizard() {
     }));
 
     setStep(3);
-  }, [location.state]);
+  }, [location.key, location.state]);
 
   useEffect(() => {
     const loadSupportData = async () => {
