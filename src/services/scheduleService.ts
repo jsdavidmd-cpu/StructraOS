@@ -22,6 +22,9 @@ export interface ScheduleTask {
   qty_completed: number | null;
   percent_complete: number | null;
   predecessor_ids: string[];
+  phase: string | null;
+  wbs_code: string | null;
+  parent_task_id: string | null;
   lag_days: number | null;
   priority: 'low' | 'medium' | 'high' | 'critical';
   is_milestone: boolean;
@@ -60,6 +63,9 @@ export interface ScheduleTaskInput {
   qty_completed?: number | null;
   percent_complete?: number | null;
   predecessor_ids?: string[];
+  phase?: string | null;
+  wbs_code?: string | null;
+  parent_task_id?: string | null;
   lag_days?: number | null;
   priority?: 'low' | 'medium' | 'high' | 'critical';
   is_milestone?: boolean;
@@ -174,7 +180,7 @@ export const scheduleService = {
 
     const [{ data: boqRows, error: boqError }, { data: existingRows, error: existingError }] = await Promise.all([
       (supabase.from('boq_items') as any)
-        .select('id,description,qty,unit,sort_order')
+        .select('id,description,qty,unit,sort_order,section')
         .eq('estimate_id', estimateId)
         .order('sort_order', { ascending: true }),
       (supabase.from('tasks') as any)
@@ -194,6 +200,8 @@ export const scheduleService = {
         boq_item_id: row.id,
         task_name: row.description,
         description: row.unit ? `${row.qty ?? 0} ${row.unit}` : null,
+        phase: row.section || 'BOQ Generated',
+        wbs_code: `BOQ-${Number(row.sort_order ?? index + 1)}`,
         qty_planned: row.qty ?? 0,
         qty_completed: 0,
         percent_complete: 0,
@@ -210,5 +218,18 @@ export const scheduleService = {
 
     if (insertError) throw insertError;
     return rowsToInsert.length;
+  },
+
+  async resequenceTasks(projectId: string, orderedTaskIds: string[]): Promise<void> {
+    const updates = orderedTaskIds.map((taskId, index) =>
+      (supabase.from('tasks') as any)
+        .update({ sort_order: index + 1 })
+        .eq('project_id', projectId)
+        .eq('id', taskId)
+    );
+
+    const results = await Promise.all(updates);
+    const failed = results.find((result: any) => result.error);
+    if (failed?.error) throw failed.error;
   },
 };

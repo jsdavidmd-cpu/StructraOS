@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/authStore';
 import { scheduleService, type CrewOption, type ScheduleTask, type ScheduleTaskInput } from '@/services/scheduleService';
-import { CalendarDays, Save, Trash2, Workflow, Target, RefreshCw } from 'lucide-react';
+import { CalendarDays, Save, Trash2, Workflow, Target, RefreshCw, ArrowUp, ArrowDown } from 'lucide-react';
 
 type FormState = {
   task_name: string;
@@ -23,6 +23,9 @@ type FormState = {
   productivity_rate: string;
   lag_days: string;
   sort_order: string;
+  phase: string;
+  wbs_code: string;
+  parent_task_id: string;
   priority: 'low' | 'medium' | 'high' | 'critical';
   status: 'not_started' | 'in_progress' | 'completed' | 'on_hold';
   crew_id: string;
@@ -46,6 +49,9 @@ const emptyForm: FormState = {
   productivity_rate: '',
   lag_days: '0',
   sort_order: '0',
+  phase: 'Execution',
+  wbs_code: '',
+  parent_task_id: '',
   priority: 'medium',
   status: 'not_started',
   crew_id: '',
@@ -151,6 +157,7 @@ export default function SchedulePage() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [phaseFilter, setPhaseFilter] = useState('');
   const [showCriticalOnly, setShowCriticalOnly] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -189,10 +196,28 @@ export default function SchedulePage() {
       const matchesSearch = task.task_name.toLowerCase().includes(search.toLowerCase())
         || (task.description ?? '').toLowerCase().includes(search.toLowerCase());
       const matchesStatus = !statusFilter || task.status === statusFilter;
+      const matchesPhase = !phaseFilter || (task.phase || 'Unassigned') === phaseFilter;
       const matchesCritical = !showCriticalOnly || criticalPathIds.has(task.id);
-      return matchesSearch && matchesStatus && matchesCritical;
+      return matchesSearch && matchesStatus && matchesPhase && matchesCritical;
     });
-  }, [tasks, search, statusFilter, showCriticalOnly, criticalPathIds]);
+  }, [tasks, search, statusFilter, phaseFilter, showCriticalOnly, criticalPathIds]);
+
+  const phaseOptions = useMemo(
+    () => Array.from(new Set(tasks.map((task) => task.phase || 'Unassigned'))).sort((a, b) => a.localeCompare(b)),
+    [tasks]
+  );
+
+  const groupedTasks = useMemo(() => {
+    const groups = new Map<string, ScheduleTask[]>();
+    filteredTasks.forEach((task) => {
+      const key = task.phase || 'Unassigned';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(task);
+    });
+    return Array.from(groups.entries())
+      .map(([phase, phaseTasks]) => [phase, phaseTasks.sort((a, b) => a.sort_order - b.sort_order)] as const)
+      .sort((a, b) => a[0].localeCompare(b[0]));
+  }, [filteredTasks]);
 
   const summary = useMemo(() => {
     const total = tasks.length;
@@ -258,6 +283,9 @@ export default function SchedulePage() {
       qty_completed: toNumberOrNull(form.qty_completed),
       percent_complete: toNumberOrNull(form.percent_complete),
       productivity_rate: toNumberOrNull(form.productivity_rate),
+      phase: form.phase.trim() || null,
+      wbs_code: form.wbs_code.trim() || null,
+      parent_task_id: form.parent_task_id || null,
       lag_days: toNumberOrNull(form.lag_days),
       sort_order: toNumberOrNull(form.sort_order) ?? 0,
       priority: form.priority,
@@ -290,6 +318,9 @@ export default function SchedulePage() {
       qty_completed: task.qty_completed?.toString() || '',
       percent_complete: task.percent_complete?.toString() || '0',
       productivity_rate: task.productivity_rate?.toString() || '',
+      phase: task.phase || 'Execution',
+      wbs_code: task.wbs_code || '',
+      parent_task_id: task.parent_task_id || '',
       lag_days: task.lag_days?.toString() || '0',
       sort_order: task.sort_order?.toString() || '0',
       priority: task.priority || 'medium',
@@ -371,6 +402,28 @@ export default function SchedulePage() {
     }
   };
 
+  const moveTask = async (taskId: string, direction: 'up' | 'down') => {
+    if (!projectId) return;
+    const ordered = [...tasks].sort((a, b) => a.sort_order - b.sort_order);
+    const index = ordered.findIndex((task) => task.id === taskId);
+    if (index === -1) return;
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= ordered.length) return;
+
+    [ordered[index], ordered[targetIndex]] = [ordered[targetIndex], ordered[index]];
+
+    try {
+      setSaving(true);
+      await scheduleService.resequenceTasks(projectId, ordered.map((task) => task.id));
+      setTasks(ordered.map((task, orderIndex) => ({ ...task, sort_order: orderIndex + 1 })));
+      setSuccess(`Task moved ${direction}.`);
+    } catch (err: any) {
+      setError(err.message || 'Failed to reorder tasks');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!projectId) {
     return (
       <div className="space-y-4">
@@ -434,6 +487,8 @@ export default function SchedulePage() {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1"><Label>Phase</Label><Input value={form.phase} onChange={(e) => setForm((prev) => ({ ...prev, phase: e.target.value }))} placeholder="e.g., Substructure" /></div>
+              <div className="space-y-1"><Label>WBS Code</Label><Input value={form.wbs_code} onChange={(e) => setForm((prev) => ({ ...prev, wbs_code: e.target.value }))} placeholder="e.g., 2.3.1" /></div>
               <div className="space-y-1"><Label>Qty Planned</Label><Input type="number" value={form.qty_planned} onChange={(e) => setForm((prev) => ({ ...prev, qty_planned: e.target.value }))} /></div>
               <div className="space-y-1"><Label>Qty Completed</Label><Input type="number" value={form.qty_completed} onChange={(e) => setForm((prev) => ({ ...prev, qty_completed: e.target.value }))} /></div>
               <div className="space-y-1"><Label>% Complete</Label><Input type="number" min="0" max="100" value={form.percent_complete} onChange={(e) => setForm((prev) => ({ ...prev, percent_complete: e.target.value }))} /></div>
@@ -482,6 +537,16 @@ export default function SchedulePage() {
               </select>
             </div>
 
+            <div className="space-y-1">
+              <Label>Parent Task</Label>
+              <select className="w-full border rounded-md px-3 py-2 bg-background" value={form.parent_task_id} onChange={(e) => setForm((prev) => ({ ...prev, parent_task_id: e.target.value }))}>
+                <option value="">None</option>
+                {tasks
+                  .filter((task) => task.id !== activeTaskId)
+                  .map((task) => <option key={task.id} value={task.id}>{task.wbs_code ? `${task.wbs_code} - ` : ''}{task.task_name}</option>)}
+              </select>
+            </div>
+
             <div className="space-y-1"><Label>Resource Notes</Label><Input value={form.resource_notes} onChange={(e) => setForm((prev) => ({ ...prev, resource_notes: e.target.value }))} /></div>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.is_milestone} onChange={(e) => setForm((prev) => ({ ...prev, is_milestone: e.target.checked }))} /> Milestone</label>
 
@@ -498,11 +563,15 @@ export default function SchedulePage() {
             <CardDescription>Dependencies, progress status, and project timeline tracking.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <Input placeholder="Search task..." value={search} onChange={(e) => setSearch(e.target.value)} />
               <select className="w-full border rounded-md px-3 py-2 bg-background" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                 <option value="">All Status</option>
                 {statusOptions.map((option) => <option key={option} value={option}>{option.replace('_', ' ')}</option>)}
+              </select>
+              <select className="w-full border rounded-md px-3 py-2 bg-background" value={phaseFilter} onChange={(e) => setPhaseFilter(e.target.value)}>
+                <option value="">All Phases</option>
+                {phaseOptions.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
               </select>
               <label className="flex items-center gap-2 text-sm border rounded-md px-3 py-2"><input type="checkbox" checked={showCriticalOnly} onChange={(e) => setShowCriticalOnly(e.target.checked)} />Critical path only</label>
             </div>
@@ -520,19 +589,26 @@ export default function SchedulePage() {
                   <div className="col-span-2">Dates</div>
                   <div className="col-span-2 text-right">Actions</div>
                 </div>
-                {filteredTasks.map((task) => (
-                  <div key={task.id} className="grid grid-cols-12 px-3 py-2 border-t text-sm items-center">
-                    <div className="col-span-4 min-w-0">
-                      <p className={`font-medium truncate ${criticalPathIds.has(task.id) ? 'text-amber-600' : ''}`}>{task.task_name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{task.predecessor_ids.length} predecessor(s) • {task.priority}</p>
-                    </div>
-                    <div className="col-span-2">{task.status.replace('_', ' ')}</div>
-                    <div className="col-span-2">{Math.round(task.percent_complete ?? 0)}%</div>
-                    <div className="col-span-2 text-xs text-muted-foreground">{task.planned_start ? `${toIsoDate(task.planned_start)} → ${toIsoDate(task.planned_end)}` : 'No dates'}</div>
-                    <div className="col-span-2 flex justify-end gap-2">
-                      <Button size="sm" variant="outline" onClick={() => editTask(task)}>Edit</Button>
-                      <Button size="sm" variant="outline" onClick={() => void removeTask(task.id)}><Trash2 className="h-4 w-4 text-red-600" /></Button>
-                    </div>
+                {groupedTasks.map(([phase, phaseTasks]) => (
+                  <div key={phase}>
+                    <div className="px-3 py-2 border-t bg-muted/20 text-xs font-semibold uppercase tracking-wide">{phase}</div>
+                    {phaseTasks.map((task) => (
+                      <div key={task.id} className="grid grid-cols-12 px-3 py-2 border-t text-sm items-center">
+                        <div className="col-span-4 min-w-0">
+                          <p className={`font-medium truncate ${criticalPathIds.has(task.id) ? 'text-amber-600' : ''}`}>{task.wbs_code ? `${task.wbs_code} · ` : ''}{task.task_name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{task.predecessor_ids.length} predecessor(s) • {task.priority}</p>
+                        </div>
+                        <div className="col-span-2">{task.status.replace('_', ' ')}</div>
+                        <div className="col-span-2">{Math.round(task.percent_complete ?? 0)}%</div>
+                        <div className="col-span-2 text-xs text-muted-foreground">{task.planned_start ? `${toIsoDate(task.planned_start)} → ${toIsoDate(task.planned_end)}` : 'No dates'}</div>
+                        <div className="col-span-2 flex justify-end gap-2">
+                          <Button size="sm" variant="outline" onClick={() => void moveTask(task.id, 'up')}><ArrowUp className="h-4 w-4" /></Button>
+                          <Button size="sm" variant="outline" onClick={() => void moveTask(task.id, 'down')}><ArrowDown className="h-4 w-4" /></Button>
+                          <Button size="sm" variant="outline" onClick={() => editTask(task)}>Edit</Button>
+                          <Button size="sm" variant="outline" onClick={() => void removeTask(task.id)}><Trash2 className="h-4 w-4 text-red-600" /></Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
