@@ -161,7 +161,7 @@ export const estimateService = {
       qty: item.qty,
       assembly_id: item.assembly_id,
       unit_price: item.unit_price,
-      amount: item.qty * item.unit_price,
+      // amount is a generated column - don't insert it
       markup_percent: item.markup_percent,
       internal_amount: item.internal_amount,
       contract_amount: item.contract_amount,
