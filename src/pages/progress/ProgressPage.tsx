@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { useProjectContext } from '@/components/ProjectContextProvider';
 import { useAuthStore } from '@/store/authStore';
+import { supabase } from '@/lib/supabase';
 import ProgressDashboard from './ProgressDashboard';
 import DailyProgressEntry from './DailyProgressEntry';
 import ProgressHistory from './ProgressHistory';
@@ -13,14 +14,41 @@ export default function ProgressPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const profile = useAuthStore((state) => state.profile);
   const { activeProject } = useProjectContext();
-  const [estimateId] = useState<string>('');
+  const [estimateId, setEstimateId] = useState<string>('');
+  const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    // TODO: Get the primary estimate for this project
-    // For now, estimateId would need to be fetched from database
-    // In practice, estimates table should have a project_id reference
+    if (projectId) {
+      fetchProjectEstimate();
+    }
   }, [projectId]);
+
+  const fetchProjectEstimate = async () => {
+    if (!projectId) return;
+    
+    try {
+      setLoading(true);
+      // Get the most recent estimate for this project
+      const { data, error } = await supabase
+        .from('estimates')
+        .select('id')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching estimate:', error);
+      } else if (data) {
+        setEstimateId((data as any).id);
+      }
+    } catch (err) {
+      console.error('Failed to fetch estimate:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleProgressUpdated = () => {
     setRefreshKey((prev) => prev + 1);
@@ -36,6 +64,10 @@ export default function ProgressPage() {
         </CardContent>
       </Card>
     );
+  }
+
+  if (loading) {
+    return <div className="text-muted-foreground">Loading project data...</div>;
   }
 
   return (
