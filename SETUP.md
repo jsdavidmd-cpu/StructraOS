@@ -34,10 +34,10 @@ npm install
 6. **Important:** Run `014_create_storage_buckets.sql` to set up file upload buckets
 
 **Storage Buckets Required:**
-- `progress-photos`: For progress monitoring photo uploads
-- `documents`: For project document uploads
+- `progress-photos`: For progress monitoring photo uploads (10 MB per file limit)
+- `documents`: For project document uploads (50 MB per file limit)
 
-The migration creates these buckets automatically with proper RLS policies.
+The migration creates these buckets automatically with proper RLS policies and file size limits.
 
 ### C. Create First Organization
 ```sql

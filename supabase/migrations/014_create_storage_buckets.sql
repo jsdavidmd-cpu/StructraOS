@@ -1,14 +1,14 @@
 -- Create storage buckets for file uploads
 
--- Progress Photos Bucket
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('progress-photos', 'progress-photos', true)
-ON CONFLICT (id) DO NOTHING;
+-- Progress Photos Bucket (10 MB limit per file)
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES ('progress-photos', 'progress-photos', true, 10485760)
+ON CONFLICT (id) DO UPDATE SET file_size_limit = 10485760;
 
--- Documents Bucket
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('documents', 'documents', true)
-ON CONFLICT (id) DO NOTHING;
+-- Documents Bucket (50 MB limit per file)
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES ('documents', 'documents', true, 52428800)
+ON CONFLICT (id) DO UPDATE SET file_size_limit = 52428800;
 
 -- Set up RLS policies for progress-photos bucket
 CREATE POLICY "Allow authenticated users to upload progress photos"
