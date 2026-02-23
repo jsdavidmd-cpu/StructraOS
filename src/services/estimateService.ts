@@ -190,26 +190,27 @@ export const estimateService = {
       .single();
 
     if (savedItems && estimate) {
+      const est = estimate as any;
       // Calculate direct cost (sum of amounts)
       const directCost = (savedItems as any[]).reduce((sum, item) => sum + (item.amount || 0), 0);
 
       // Apply OCM markups
-      const overhead = (directCost * (estimate.ocm_overhead || 0)) / 100;
-      const contingency = (directCost * (estimate.ocm_contingency || 0)) / 100;
-      const misc = (directCost * (estimate.ocm_misc || 0)) / 100;
+      const overhead = (directCost * (est.ocm_overhead || 0)) / 100;
+      const contingency = (directCost * (est.ocm_contingency || 0)) / 100;
+      const misc = (directCost * (est.ocm_misc || 0)) / 100;
       const subtotal = directCost + overhead + contingency + misc;
 
-      const profit = (subtotal * (estimate.ocm_profit || 0)) / 100;
+      const profit = (subtotal * (est.ocm_profit || 0)) / 100;
       const subtotalWithProfit = subtotal + profit;
 
       // Apply VAT
-      const vatRate = estimate.vat_rate || 12;
+      const vatRate = est.vat_rate || 12;
       const vat = (subtotalWithProfit * vatRate) / 100;
       const totalAmount = subtotalWithProfit + vat;
 
       // Update estimate with new totals
-      await supabase
-        .from('estimates')
+      await (supabase
+        .from('estimates') as any)
         .update({
           subtotal: subtotal,
           total_amount: totalAmount,
