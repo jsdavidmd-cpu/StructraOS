@@ -130,31 +130,49 @@ export const authService = {
   // Temporary sign in (development only)
   async temporarySignIn() {
     // For development: ensure dev account exists and sign in
+    const devEmail = 'dev@structra.local';
+    const devPassword = 'password123';
+
     try {
+      console.log('Starting temporary dev login...');
+      
       // First, call the dev-login-setup function to create/verify dev account
-      await supabase.functions.invoke('dev-login-setup', {
+      console.log('Setting up dev account...');
+      const setupResponse = await supabase.functions.invoke('dev-login-setup', {
         body: {},
       });
 
+      if (!setupResponse) {
+        throw new Error('No response from dev-login-setup function');
+      }
+
+      console.log('Dev account setup complete:', setupResponse);
+
       // Now sign in with dev credentials
+      console.log('Signing in with dev credentials...');
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: 'dev@structra.local',
-        password: 'password123',
+        email: devEmail,
+        password: devPassword,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Sign in error:', error);
+        throw error;
+      }
 
+      console.log('Successfully signed in, loading profile...');
       if (data.user) {
         await this.loadProfile(data.user);
       }
 
+      console.log('Dev login complete!');
       return data;
     } catch (err: any) {
       console.error('Temporary login error:', err);
       // Provide helpful error message
+      const errorDetails = err?.message || String(err) || 'Unknown error';
       throw new Error(
-        'Dev login failed. Make sure Supabase is configured and the dev-login-setup function is deployed. ' +
-        'Error: ' + (err.message || 'Unknown error')
+        `Dev login failed: ${errorDetails}`
       );
     }
   },
