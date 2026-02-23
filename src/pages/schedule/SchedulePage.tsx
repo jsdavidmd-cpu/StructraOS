@@ -165,6 +165,8 @@ export default function SchedulePage() {
   const [dragOverPlacement, setDragOverPlacement] = useState<'before' | 'after' | 'child' | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [bulkPhase, setBulkPhase] = useState('');
+  const [bulkStatus, setBulkStatus] = useState<FormState['status']>('not_started');
+  const [bulkPriority, setBulkPriority] = useState<FormState['priority']>('medium');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -637,6 +639,49 @@ export default function SchedulePage() {
     }
   };
 
+  const applyStatusToSelected = async () => {
+    if (!projectId) return;
+    if (selectedTaskIds.length === 0) {
+      setError('Select at least one task.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError('');
+      const appliedCount = await scheduleService.bulkUpdateTasks(projectId, selectedTaskIds, { status: bulkStatus });
+      await scheduleService.rollupParentProgress(projectId);
+      await loadData();
+      setSuccess(`Applied status to ${appliedCount} task(s).`);
+      setSelectedTaskIds([]);
+    } catch (err: any) {
+      setError(err.message || 'Failed to apply status to selected tasks');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const applyPriorityToSelected = async () => {
+    if (!projectId) return;
+    if (selectedTaskIds.length === 0) {
+      setError('Select at least one task.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError('');
+      const appliedCount = await scheduleService.bulkUpdateTasks(projectId, selectedTaskIds, { priority: bulkPriority });
+      await loadData();
+      setSuccess(`Applied priority to ${appliedCount} task(s).`);
+      setSelectedTaskIds([]);
+    } catch (err: any) {
+      setError(err.message || 'Failed to apply priority to selected tasks');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!projectId) {
     return (
       <div className="space-y-4">
@@ -809,6 +854,16 @@ export default function SchedulePage() {
               <Button variant="outline" onClick={selectVisibleTasks} disabled={loading || filteredTasks.length === 0}>Select Visible ({filteredTasks.length})</Button>
               <Button variant="outline" onClick={clearSelectedTasks} disabled={selectedTaskIds.length === 0}>Clear Selection ({selectedTaskIds.length})</Button>
               <Button onClick={() => void applyPhaseToSelected()} disabled={saving || selectedTaskIds.length === 0}>Apply Phase to Selected</Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
+              <select className="w-full border rounded-md px-3 py-2 bg-background" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value as FormState['status'])}>
+                {statusOptions.map((option) => <option key={option} value={option}>{option.replace('_', ' ')}</option>)}
+              </select>
+              <Button onClick={() => void applyStatusToSelected()} disabled={saving || selectedTaskIds.length === 0}>Apply Status to Selected</Button>
+              <select className="w-full border rounded-md px-3 py-2 bg-background" value={bulkPriority} onChange={(e) => setBulkPriority(e.target.value as FormState['priority'])}>
+                {priorityOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+              <Button onClick={() => void applyPriorityToSelected()} disabled={saving || selectedTaskIds.length === 0}>Apply Priority to Selected</Button>
             </div>
             <p className="text-xs text-muted-foreground">Drag to reorder. Drop on the right side of a row to nest as child task.</p>
 

@@ -345,6 +345,27 @@ export const scheduleService = {
     return taskIds.length;
   },
 
+  async bulkUpdateTasks(
+    projectId: string,
+    taskIds: string[],
+    updates: Partial<Pick<ScheduleTaskInput, 'status' | 'priority' | 'phase'>>
+  ): Promise<number> {
+    if (taskIds.length === 0) return 0;
+
+    const operations = taskIds.map((taskId) =>
+      (supabase.from('tasks') as any)
+        .update(updates)
+        .eq('project_id', projectId)
+        .eq('id', taskId)
+    );
+
+    const results = await Promise.all(operations);
+    const failed = results.find((result: any) => result.error);
+    if (failed?.error) throw failed.error;
+
+    return taskIds.length;
+  },
+
   async rollupParentProgress(projectId: string): Promise<void> {
     const tasks = await this.getTasks(projectId);
     const byParent = new Map<string, ScheduleTask[]>();
