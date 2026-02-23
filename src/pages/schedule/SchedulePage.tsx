@@ -162,6 +162,7 @@ export default function SchedulePage() {
   const [expandedParents, setExpandedParents] = useState<Record<string, boolean>>({});
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
+  const [dragOverPlacement, setDragOverPlacement] = useState<'before' | 'after' | 'child' | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -463,7 +464,27 @@ export default function SchedulePage() {
     }
   };
 
-  const dropTask = async (targetTaskId: string, position: 'before' | 'after') => {
+  const isDescendant = (candidateId: string, ancestorId: string) => {
+    const byParent = new Map<string, string[]>();
+    tasks.forEach((task) => {
+      if (!task.parent_task_id) return;
+      if (!byParent.has(task.parent_task_id)) byParent.set(task.parent_task_id, []);
+      byParent.get(task.parent_task_id)!.push(task.id);
+    });
+
+    const stack = [...(byParent.get(ancestorId) ?? [])];
+    const seen = new Set<string>();
+    while (stack.length) {
+      const current = stack.pop()!;
+      if (seen.has(current)) continue;
+      seen.add(current);
+      if (current === candidateId) return true;
+      stack.push(...(byParent.get(current) ?? []));
+    }
+    return false;
+  };
+
+  const dropTask = async (targetTaskId: string, position: 'before' | 'after' | 'child') => {
     if (!projectId || !draggedTaskId || draggedTaskId === targetTaskId) return;
 
     const working = [...orderedTasks];
@@ -472,22 +493,47 @@ export default function SchedulePage() {
     if (draggedIndex < 0 || targetIndex < 0) return;
 
     const [draggedTask] = working.splice(draggedIndex, 1);
+    const targetTask = tasks.find((task) => task.id === targetTaskId);
+
+    if (position === 'child') {
+      if (isDescendant(targetTaskId, draggedTaskId)) {
+        setError('Cannot move task under its own descendant.');
+        setDraggedTaskId(null);
+        setDragOverTaskId(null);
+        setDragOverPlacement(null);
+        return;
+      }
+    }
+
     let nextTargetIndex = working.findIndex((task) => task.id === targetTaskId);
     if (nextTargetIndex < 0) nextTargetIndex = working.length;
     const insertionIndex = position === 'before' ? nextTargetIndex : nextTargetIndex + 1;
     working.splice(insertionIndex, 0, draggedTask);
 
+    const nextParentId = position === 'child' ? targetTaskId : draggedTask.parent_task_id;
+
     try {
       setSaving(true);
+      setError('');
       await scheduleService.resequenceTasks(projectId, working.map((task) => task.id));
-      setTasks(working.map((task, index) => ({ ...task, sort_order: index + 1 })));
-      setSuccess('Task order updated.');
+
+      if (draggedTask.parent_task_id !== nextParentId) {
+        await scheduleService.updateTask(draggedTask.id, {
+          parent_task_id: nextParentId,
+          phase: position === 'child' ? targetTask?.phase || draggedTask.phase : draggedTask.phase,
+        });
+      }
+
+      await scheduleService.rollupParentProgress(projectId);
+      await loadData();
+      setSuccess(position === 'child' ? 'Task nested under selected parent.' : 'Task order updated.');
     } catch (err: any) {
       setError(err.message || 'Failed to reorder tasks');
     } finally {
       setSaving(false);
       setDraggedTaskId(null);
       setDragOverTaskId(null);
+      setDragOverPlacement(null);
     }
   };
 
@@ -646,6 +692,7 @@ export default function SchedulePage() {
               </select>
               <label className="flex items-center gap-2 text-sm border rounded-md px-3 py-2"><input type="checkbox" checked={showCriticalOnly} onChange={(e) => setShowCriticalOnly(e.target.checked)} />Critical path only</label>
             </div>
+            <p className="text-xs text-muted-foreground">Drag to reorder. Drop on the right side of a row to nest as child task.</p>
 
             {loading ? (
               <p className="text-muted-foreground">Loading schedule...</p>
@@ -666,21 +713,35 @@ export default function SchedulePage() {
                     {rows.map(({ task, depth, hasChildren }) => (
                       <div
                         key={task.id}
-                        className={`grid grid-cols-12 px-3 py-2 border-t text-sm items-center ${dragOverTaskId === task.id ? 'bg-accent/40' : ''}`}
+                        className={`grid grid-cols-12 px-3 py-2 border-t text-sm items-center ${dragOverTaskId === task.id ? 'bg-accent/40' : ''} ${dragOverTaskId === task.id && dragOverPlacement === 'child' ? 'outline outline-1 outline-primary/50' : ''}`}
                         draggable
                         onDragStart={() => setDraggedTaskId(task.id)}
                         onDragEnd={() => {
                           setDraggedTaskId(null);
                           setDragOverTaskId(null);
+                          setDragOverPlacement(null);
                         }}
                         onDragOver={(e) => {
                           e.preventDefault();
                           setDragOverTaskId(task.id);
+                          const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                          const isChildZone = e.clientX > rect.left + rect.width * 0.72;
+                          const placement = isChildZone
+                            ? 'child'
+                            : e.clientY < rect.top + rect.height / 2
+                              ? 'before'
+                              : 'after';
+                          setDragOverPlacement(placement);
                         }}
                         onDrop={(e) => {
                           e.preventDefault();
                           const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
-                          const position = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+                          const isChildZone = e.clientX > rect.left + rect.width * 0.72;
+                          const position = isChildZone
+                            ? 'child'
+                            : e.clientY < rect.top + rect.height / 2
+                              ? 'before'
+                              : 'after';
                           void dropTask(task.id, position);
                         }}
                       >
