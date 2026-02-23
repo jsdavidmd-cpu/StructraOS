@@ -129,19 +129,34 @@ export const authService = {
 
   // Temporary sign in (development only)
   async temporarySignIn() {
-    // For development: use a test account
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: 'dev@structra.local',
-      password: 'password123',
-    });
+    // For development: ensure dev account exists and sign in
+    try {
+      // First, call the dev-login-setup function to create/verify dev account
+      await supabase.functions.invoke('dev-login-setup', {
+        body: {},
+      });
 
-    if (error) throw error;
+      // Now sign in with dev credentials
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: 'dev@structra.local',
+        password: 'password123',
+      });
 
-    if (data.user) {
-      await this.loadProfile(data.user);
+      if (error) throw error;
+
+      if (data.user) {
+        await this.loadProfile(data.user);
+      }
+
+      return data;
+    } catch (err: any) {
+      console.error('Temporary login error:', err);
+      // Provide helpful error message
+      throw new Error(
+        'Dev login failed. Make sure Supabase is configured and the dev-login-setup function is deployed. ' +
+        'Error: ' + (err.message || 'Unknown error')
+      );
     }
-
-    return data;
   },
 
   // Sign out
