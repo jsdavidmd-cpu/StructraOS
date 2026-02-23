@@ -49,8 +49,10 @@ export default function WarehouseStockOverview({ organizationId }: WarehouseStoc
           const totalReserved = stockLevels.reduce((sum: number, level: any) => sum + (level.quantity_reserved || 0), 0);
           const totalAvailable = totalQuantity - totalReserved;
           
+          // Default reorder point if not available from database
+          const defaultReorderPoint = 10;
           const lowStockItems = stockLevels.filter((level: any) => {
-            const reorderPoint = level.inventory_items?.reorder_point || 10;
+            const reorderPoint = level.inventory_items?.reorder_point || defaultReorderPoint;
             return level.quantity_on_hand < reorderPoint;
           }).length;
           
@@ -76,6 +78,7 @@ export default function WarehouseStockOverview({ organizationId }: WarehouseStoc
       }
     } catch (err) {
       console.error('Failed to load warehouse data:', err);
+      setWarehouses([]);
     } finally {
       setLoading(false);
     }
