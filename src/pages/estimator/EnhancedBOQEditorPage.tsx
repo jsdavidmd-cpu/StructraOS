@@ -39,7 +39,7 @@ type EnhancedBOQEditorPageProps = {
 };
 
 export default function EnhancedBOQEditorPage({ embedded = false, onSaved }: EnhancedBOQEditorPageProps) {
-  const { id } = useParams<{ id: string }>();
+  const { id, projectId } = useParams<{ id: string; projectId?: string }>();
   const navigate = useNavigate();
 
   const [estimate, setEstimate] = useState<any>(null);
@@ -525,6 +525,11 @@ export default function EnhancedBOQEditorPage({ embedded = false, onSaved }: Enh
   const saveChanges = async () => {
     setSaving(true);
     try {
+      // If projectId was in the URL but estimate doesn't have it, update estimate with project_id
+      if (projectId && estimate && !estimate.project_id) {
+        await estimateService.updateEstimate(id!, { project_id: projectId } as any);
+      }
+
       // Map items to correct format
       const boqItems = items.map(item => {
         const directCost = item.qty * item.unit_price;
