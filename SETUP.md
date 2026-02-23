@@ -141,6 +141,27 @@ npm run electron:dev
 
 ## 6. Usage Guide
 
+### Global Search
+
+The system includes a powerful global search feature that searches across all modules:
+
+**How to use:**
+- Click the search button in the sidebar
+- Or press **Ctrl+K** (Windows/Linux) or **⌘K** (Mac) to open search
+- Type your search query to find:
+  - Projects (by name, client, location)
+  - Estimates (by number, project name)
+  - Materials (by name, category)
+  - Schedule Tasks (by name, description)
+  - Assemblies (by name, code)
+  - Workers (by name, trade)
+  - BOQ Items (by item number, description)
+
+**Navigation:**
+- Use ↑↓ arrow keys to navigate results
+- Press **Enter** to open selected item
+- Press **Esc** to close search
+
 ### Creating Your First Estimate
 
 1. **Login** with your admin credentials

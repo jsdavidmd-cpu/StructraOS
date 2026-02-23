@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FolderKanban, LibraryBig, BarChart3, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, LibraryBig, BarChart3, Shield, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/appStore';
+import GlobalSearch from './GlobalSearch';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -14,6 +16,20 @@ const menuItems = [
 export default function SidebarGlobal() {
   const location = useLocation();
   const { sidebarOpen, toggleSidebar } = useAppStore();
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Keyboard shortcut: Cmd/Ctrl + K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <aside
@@ -41,6 +57,29 @@ export default function SidebarGlobal() {
             className={cn('p-1.5 rounded-lg hover:bg-accent transition-colors', !sidebarOpen && 'mx-auto')}
           >
             {sidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+          </button>
+        </div>
+
+        {/* Global Search Button */}
+        <div className="px-2 py-3 border-b">
+          <button
+            onClick={() => setSearchOpen(true)}
+            className={cn(
+              'w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-colors',
+              'bg-accent/50 hover:bg-accent text-muted-foreground hover:text-accent-foreground',
+              !sidebarOpen && 'justify-center'
+            )}
+            title={!sidebarOpen ? 'Search (Ctrl+K)' : undefined}
+          >
+            <Search className="w-4 h-4 flex-shrink-0" />
+            {sidebarOpen && (
+              <>
+                <span className="text-sm flex-1 text-left">Search...</span>
+                <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-xs bg-background border rounded">
+                  ⌘K
+                </kbd>
+              </>
+            )}
           </button>
         </div>
 
@@ -84,6 +123,9 @@ export default function SidebarGlobal() {
           )}
         </div>
       </div>
+
+      {/* Global Search Dialog */}
+      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </aside>
   );
 }
