@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/authStore';
 import { scheduleService, type CrewOption, type ScheduleTask, type ScheduleTaskInput } from '@/services/scheduleService';
-import { CalendarDays, Save, Trash2, Workflow, Target, RefreshCw, ChevronRight, ChevronDown, GripVertical, TrendingUp, Gauge } from 'lucide-react';
+import { CalendarDays, Save, Trash2, Workflow, Target, RefreshCw, ChevronRight, ChevronDown, GripVertical, TrendingUp, Gauge, Download } from 'lucide-react';
 
 type FormState = {
   task_name: string;
@@ -84,6 +84,28 @@ const diffDays = (later?: string | null, earlier?: string | null) => {
   const b = new Date(earlier);
   if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
   return Math.round((a.getTime() - b.getTime()) / 86400000);
+};
+
+const exportCsv = (filename: string, headers: string[], rows: Array<Array<string | number>>) => {
+  const escapeValue = (value: string | number) => {
+    const str = String(value ?? '');
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const content = [headers, ...rows]
+    .map((row) => row.map(escapeValue).join(','))
+    .join('\n');
+
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 };
 
 const computeCriticalPath = (tasks: ScheduleTask[]) => {
@@ -834,6 +856,42 @@ export default function SchedulePage() {
     }
   };
 
+  const exportPhaseSlippage = () => {
+    const rows = scheduleAnalytics.phaseSlippage.map((item) => [
+      item.phase,
+      item.avgSlip,
+      item.delayed,
+      item.ahead,
+      item.count,
+    ]);
+
+    exportCsv(
+      `phase-slippage-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Phase', 'Average Slip (days)', 'Delayed Tasks', 'Ahead Tasks', 'Sample Size'],
+      rows
+    );
+  };
+
+  const exportWeeklySlippage = () => {
+    const rows = weeklySlippage.map((entry) => [
+      entry.task.wbs_code || '',
+      entry.task.task_name,
+      entry.task.phase || 'Unassigned',
+      entry.task.status,
+      entry.slipDays,
+      entry.severity,
+      entry.baselineEnd,
+      entry.comparisonEnd,
+      entry.updatedAt,
+    ]);
+
+    exportCsv(
+      `weekly-slippage-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['WBS', 'Task', 'Phase', 'Status', 'Slip Days', 'Severity', 'Baseline End', 'Current End', 'Updated At'],
+      rows
+    );
+  };
+
   if (!projectId) {
     return (
       <div className="space-y-4">
@@ -912,7 +970,13 @@ export default function SchedulePage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Phase Slippage</CardTitle>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="text-base">Phase Slippage</CardTitle>
+              <Button size="sm" variant="outline" onClick={exportPhaseSlippage} disabled={scheduleAnalytics.phaseSlippage.length === 0}>
+                <Download className="h-3.5 w-3.5 mr-1" />
+                CSV
+              </Button>
+            </div>
             <CardDescription>Average slip in days vs baseline by phase.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -942,7 +1006,13 @@ export default function SchedulePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">What Slipped This Week</CardTitle>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-base">What Slipped This Week</CardTitle>
+            <Button size="sm" variant="outline" onClick={exportWeeklySlippage} disabled={weeklySlippage.length === 0}>
+              <Download className="h-3.5 w-3.5 mr-1" />
+              CSV
+            </Button>
+          </div>
           <CardDescription>Recently updated tasks that moved beyond their baseline end dates (last 7 days).</CardDescription>
         </CardHeader>
         <CardContent>
