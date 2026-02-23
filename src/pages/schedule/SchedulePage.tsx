@@ -399,8 +399,26 @@ export default function SchedulePage() {
       setError('');
       setSuccess('');
 
+      let cascadeAppliedCount = 0;
+
       if (activeTaskId) {
+        const originalTask = tasks.find((task) => task.id === activeTaskId);
         await scheduleService.updateTask(activeTaskId, payload);
+
+        if (
+          projectId &&
+          originalTask &&
+          (originalTask.phase || '') !== (payload.phase || '')
+        ) {
+          const hasChildren = tasks.some((task) => task.parent_task_id === activeTaskId);
+          if (hasChildren) {
+            const shouldCascade = window.confirm('Parent phase changed. Cascade this phase to all descendants?');
+            if (shouldCascade && payload.phase) {
+              cascadeAppliedCount = await scheduleService.cascadeTaskPhase(projectId, activeTaskId, payload.phase);
+            }
+          }
+        }
+
         setSuccess('Task updated successfully.');
       } else {
         await scheduleService.createTask(payload);
@@ -411,6 +429,10 @@ export default function SchedulePage() {
         await scheduleService.renumberWbsCodes(projectId);
         await scheduleService.rollupParentProgress(projectId);
         await loadData();
+      }
+
+      if (cascadeAppliedCount > 0) {
+        setSuccess(`Task updated. Cascaded phase to ${cascadeAppliedCount} descendant task(s).`);
       }
 
       resetEditor();
@@ -678,7 +700,19 @@ export default function SchedulePage() {
 
             <div className="space-y-1">
               <Label>Parent Task</Label>
-              <select className="w-full border rounded-md px-3 py-2 bg-background" value={form.parent_task_id} onChange={(e) => setForm((prev) => ({ ...prev, parent_task_id: e.target.value }))}>
+              <select
+                className="w-full border rounded-md px-3 py-2 bg-background"
+                value={form.parent_task_id}
+                onChange={(e) => {
+                  const nextParentId = e.target.value;
+                  const parent = tasks.find((task) => task.id === nextParentId);
+                  setForm((prev) => ({
+                    ...prev,
+                    parent_task_id: nextParentId,
+                    phase: nextParentId && parent?.phase ? parent.phase : prev.phase,
+                  }));
+                }}
+              >
                 <option value="">None</option>
                 {tasks
                   .filter((task) => task.id !== activeTaskId)

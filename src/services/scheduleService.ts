@@ -288,6 +288,46 @@ export const scheduleService = {
     if (failed?.error) throw failed.error;
   },
 
+  async cascadeTaskPhase(projectId: string, parentTaskId: string, phase: string): Promise<number> {
+    const tasks = await this.getTasks(projectId);
+    if (tasks.length === 0) return 0;
+
+    const childMap = new Map<string, ScheduleTask[]>();
+    tasks.forEach((task) => {
+      if (!task.parent_task_id) return;
+      if (!childMap.has(task.parent_task_id)) childMap.set(task.parent_task_id, []);
+      childMap.get(task.parent_task_id)!.push(task);
+    });
+
+    const descendants: ScheduleTask[] = [];
+    const stack = [...(childMap.get(parentTaskId) ?? [])];
+    const seen = new Set<string>();
+
+    while (stack.length) {
+      const current = stack.pop()!;
+      if (seen.has(current.id)) continue;
+      seen.add(current.id);
+      descendants.push(current);
+      stack.push(...(childMap.get(current.id) ?? []));
+    }
+
+    const targets = descendants.filter((task) => (task.phase || '') !== phase);
+    if (targets.length === 0) return 0;
+
+    const operations = targets.map((task) =>
+      (supabase.from('tasks') as any)
+        .update({ phase })
+        .eq('project_id', projectId)
+        .eq('id', task.id)
+    );
+
+    const results = await Promise.all(operations);
+    const failed = results.find((result: any) => result.error);
+    if (failed?.error) throw failed.error;
+
+    return targets.length;
+  },
+
   async rollupParentProgress(projectId: string): Promise<void> {
     const tasks = await this.getTasks(projectId);
     const byParent = new Map<string, ScheduleTask[]>();
