@@ -13,12 +13,15 @@ import { useAuthStore } from '@/store/authStore';
 
 export default function EstimatesPage() {
   const navigate = useNavigate();
-  const { projectId } = useParams<{ projectId: string }>();
+  const { projectId: rawProjectId } = useParams<{ projectId: string }>();
   const profile = useAuthStore((state) => state.profile);
   const [estimates, setEstimates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Convert string "undefined" to actual undefined
+  const projectId = rawProjectId && rawProjectId !== 'undefined' ? rawProjectId : undefined;
 
   useEffect(() => {
     loadEstimates();
@@ -36,7 +39,8 @@ export default function EstimatesPage() {
         return;
       }
 
-      const data = await estimateService.getEstimates(projectId, profile?.organization_id ?? undefined);
+      const orgId = profile?.organization_id === null ? undefined : profile?.organization_id;
+      const data = await estimateService.getEstimates(projectId, orgId);
       setEstimates(data || []);
     } catch (err: any) {
       console.error('Failed to load estimates:', err);

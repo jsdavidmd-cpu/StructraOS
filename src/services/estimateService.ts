@@ -9,16 +9,20 @@ type BOQItemInsert = Database['public']['Tables']['boq_items']['Insert'];
 export const estimateService = {
   // Get all estimates for current organization or project
   async getEstimates(projectId?: string, organizationId?: string) {
+    // Normalize undefined strings
+    const normalizedProjectId = projectId && projectId !== 'undefined' ? projectId : undefined;
+    const normalizedOrgId = organizationId && organizationId !== 'undefined' ? organizationId : undefined;
+
     let query = supabase
       .from('estimates')
       .select('*, projects(name)')
       .order('created_at', { ascending: false });
 
-    if (projectId) {
-      query = query.eq('project_id', projectId);
-    } else if (organizationId) {
+    if (normalizedProjectId) {
+      query = query.eq('project_id', normalizedProjectId);
+    } else if (normalizedOrgId) {
       // If no projectId, filter by organization to prevent loading all estimates in system
-      query = query.eq('organization_id', organizationId);
+      query = query.eq('organization_id', normalizedOrgId);
     } else {
       // Neither projectId nor organizationId provided - return empty to avoid loading entire table
       return [];
