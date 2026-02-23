@@ -1,75 +1,84 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent } from '@/components/ui/card';
+import { useProjectContext } from '@/components/ProjectContextProvider';
+import { useAuthStore } from '@/store/authStore';
+import ProgressDashboard from './ProgressDashboard';
+import DailyProgressEntry from './DailyProgressEntry';
+import ProgressHistory from './ProgressHistory';
+import ProgressPhotos from './ProgressPhotos';
 
 export default function ProgressPage() {
+  const { projectId } = useParams<{ projectId: string }>();
+  const profile = useAuthStore((state) => state.profile);
+  const { activeProject } = useProjectContext();
+  const [estimateId] = useState<string>('');
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    // TODO: Get the primary estimate for this project
+    // For now, estimateId would need to be fetched from database
+    // In practice, estimates table should have a project_id reference
+  }, [projectId]);
+
+  const handleProgressUpdated = () => {
+    setRefreshKey((prev) => prev + 1);
+  };
+
+  if (!profile?.organization_id || !projectId) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-center text-muted-foreground">
+            No project selected or organization not configured.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Progress Monitoring</h2>
         <p className="text-muted-foreground">
-          Track project progress, cost variance, and schedule performance
+          Track {activeProject?.name || 'project'} progress, cost variance, and schedule performance
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Overall Progress</CardTitle>
-            <CardDescription>Weighted by cost</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold mb-2">68.5%</div>
-            <div className="w-full bg-secondary h-4 rounded-full overflow-hidden">
-              <div className="bg-primary h-full" style={{ width: '68.5%' }}></div>
-            </div>
-            <p className="text-sm text-muted-foreground mt-2">
-              On track with baseline schedule
-            </p>
-          </CardContent>
-        </Card>
+      <Tabs defaultValue="dashboard" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          <TabsTrigger value="entry">Daily Entry</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="photos">Photos</TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Cost Performance</CardTitle>
-            <CardDescription>Budget vs actual</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold mb-2">₱2.1M</div>
-            <p className="text-sm text-muted-foreground">
-              ₱3.5M budget • 60% utilized
-            </p>
-            <div className="mt-4 text-sm">
-              <div className="flex justify-between mb-1">
-                <span className="text-muted-foreground">Cost Variance:</span>
-                <span className="font-medium text-green-600">-₱150K (Under)</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        <TabsContent value="dashboard">
+          <ProgressDashboard
+            projectId={projectId}
+            estimateId={estimateId}
+            key={`dashboard-${refreshKey}`}
+          />
+        </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" />
-            <CardTitle>Progress Module</CardTitle>
-          </div>
-          <CardDescription>Coming soon</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-12 text-muted-foreground">
-            <p className="mb-2">Features include:</p>
-            <ul className="text-sm space-y-1">
-              <li>• Daily progress entry by BOQ item</li>
-              <li>• S-curve visualization</li>
-              <li>• Cost and schedule variance analysis</li>
-              <li>• Earned value management</li>
-              <li>• Photo progress documentation</li>
-              <li>• Progress reports and dashboards</li>
-            </ul>
-          </div>
-        </CardContent>
-      </Card>
+        <TabsContent value="entry">
+          <DailyProgressEntry
+            projectId={projectId}
+            estimateId={estimateId}
+            onProgressRecorded={handleProgressUpdated}
+          />
+        </TabsContent>
+
+        <TabsContent value="history">
+          <ProgressHistory projectId={projectId} key={`history-${refreshKey}`} />
+        </TabsContent>
+
+        <TabsContent value="photos">
+          <ProgressPhotos projectId={projectId} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
