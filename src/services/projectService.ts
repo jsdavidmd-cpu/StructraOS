@@ -16,11 +16,11 @@ export interface ProjectPayload {
 }
 
 export const projectService = {
-  async getProjects(companyId: string) {
+  async getProjects(organizationId: string) {
     const { data, error } = await supabase
       .from('projects' as never)
       .select('*')
-      .eq('company_id', companyId)
+      .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
