@@ -57,6 +57,8 @@ export default function ProjectWizard() {
       project_subtype: prefill.subtype || prev.project_subtype,
       template_id: prefill.id || prev.template_id,
     }));
+
+    setStep(3);
   }, [location.state]);
 
   useEffect(() => {
