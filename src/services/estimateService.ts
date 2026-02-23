@@ -7,8 +7,8 @@ type BOQItem = Database['public']['Tables']['boq_items']['Row'];
 type BOQItemInsert = Database['public']['Tables']['boq_items']['Insert'];
 
 export const estimateService = {
-  // Get all estimates for current organization
-  async getEstimates(projectId?: string) {
+  // Get all estimates for current organization or project
+  async getEstimates(projectId?: string, organizationId?: string) {
     let query = supabase
       .from('estimates')
       .select('*, projects(name)')
@@ -16,6 +16,12 @@ export const estimateService = {
 
     if (projectId) {
       query = query.eq('project_id', projectId);
+    } else if (organizationId) {
+      // If no projectId, filter by organization to prevent loading all estimates in system
+      query = query.eq('organization_id', organizationId);
+    } else {
+      // Neither projectId nor organizationId provided - return empty to avoid loading entire table
+      return [];
     }
 
     const { data, error } = await query;

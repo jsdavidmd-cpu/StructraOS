@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search, Filter, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,20 +14,34 @@ import { useAuthStore } from '@/store/authStore';
 export default function EstimatesPage() {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
+  const profile = useAuthStore((state) => state.profile);
   const [estimates, setEstimates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     loadEstimates();
-  }, [projectId]);
+  }, [projectId, profile?.organization_id]);
 
   const loadEstimates = async () => {
     try {
-      const data = await estimateService.getEstimates(projectId);
+      setLoading(true);
+      setError('');
+      
+      // If no projectId and no organization, show error
+      if (!projectId && !profile?.organization_id) {
+        setError('Please select or create a project to view estimates.');
+        setEstimates([]);
+        return;
+      }
+
+      const data = await estimateService.getEstimates(projectId, profile?.organization_id ?? undefined);
       setEstimates(data || []);
-    } catch (error) {
-      console.error('Failed to load estimates:', error);
+    } catch (err: any) {
+      console.error('Failed to load estimates:', err);
+      setError(err.message || 'Failed to load estimates. Please try again.');
+      setEstimates([]);
     } finally {
       setLoading(false);
     }
@@ -143,6 +157,31 @@ export default function EstimatesPage() {
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading estimates...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Cost Estimates</h2>
+            <p className="text-muted-foreground">Create and manage project cost estimates with BOQ</p>
+          </div>
+          <Button onClick={() => navigate('/projects')} variant="default">
+            Go to Projects
+          </Button>
+        </div>
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6 flex gap-3">
+            <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-red-900">{error}</p>
+              <p className="text-sm text-red-700 mt-1">Create a new project or select an existing one to view estimates.</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
