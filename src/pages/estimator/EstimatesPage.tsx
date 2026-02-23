@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Search, Filter, AlertCircle } from 'lucide-react';
+import { Plus, Search, Filter, AlertCircle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -48,6 +48,21 @@ export default function EstimatesPage() {
       setEstimates([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteEstimate = async (estId: string, estNumber: string) => {
+    if (!confirm(`Are you sure you want to delete estimate ${estNumber}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await estimateService.deleteEstimate(estId);
+      setEstimates(estimates.filter(e => e.id !== estId));
+      alert('Estimate deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete estimate:', error);
+      alert('Failed to delete estimate');
     }
   };
 
@@ -248,12 +263,13 @@ export default function EstimatesPage() {
                 <TableHead>Total Amount</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Date</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredEstimates.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                     No estimates found. Create your first estimate to get started.
                   </TableCell>
                 </TableRow>
@@ -261,29 +277,106 @@ export default function EstimatesPage() {
                 filteredEstimates.map((estimate) => (
                   <TableRow
                     key={estimate.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => {
-                      if (projectId) {
-                        navigate(`/projects/${projectId}/estimates/${estimate.id}`);
-                      } else {
-                        navigate(`/estimates/${estimate.id}`);
-                      }
-                    }}
+                    className="hover:bg-muted/50"
                   >
-                    <TableCell className="font-medium">{estimate.estimate_number}</TableCell>
-                    <TableCell>{estimate.project_name}</TableCell>
-                    <TableCell>{estimate.location || '-'}</TableCell>
-                    <TableCell>{estimate.client_name || '-'}</TableCell>
-                    <TableCell className="font-semibold">
+                    <TableCell 
+                      className="font-medium cursor-pointer"
+                      onClick={() => {
+                        if (projectId) {
+                          navigate(`/projects/${projectId}/estimates/${estimate.id}`);
+                        } else {
+                          navigate(`/estimates/${estimate.id}`);
+                        }
+                      }}
+                    >
+                      {estimate.estimate_number}
+                    </TableCell>
+                    <TableCell 
+                      className="cursor-pointer"
+                      onClick={() => {
+                        if (projectId) {
+                          navigate(`/projects/${projectId}/estimates/${estimate.id}`);
+                        } else {
+                          navigate(`/estimates/${estimate.id}`);
+                        }
+                      }}
+                    >
+                      {estimate.project_name}
+                    </TableCell>
+                    <TableCell 
+                      className="cursor-pointer"
+                      onClick={() => {
+                        if (projectId) {
+                          navigate(`/projects/${projectId}/estimates/${estimate.id}`);
+                        } else {
+                          navigate(`/estimates/${estimate.id}`);
+                        }
+                      }}
+                    >
+                      {estimate.location || '-'}
+                    </TableCell>
+                    <TableCell 
+                      className="cursor-pointer"
+                      onClick={() => {
+                        if (projectId) {
+                          navigate(`/projects/${projectId}/estimates/${estimate.id}`);
+                        } else {
+                          navigate(`/estimates/${estimate.id}`);
+                        }
+                      }}
+                    >
+                      {estimate.client_name || '-'}
+                    </TableCell>
+                    <TableCell 
+                      className="font-semibold cursor-pointer"
+                      onClick={() => {
+                        if (projectId) {
+                          navigate(`/projects/${projectId}/estimates/${estimate.id}`);
+                        } else {
+                          navigate(`/estimates/${estimate.id}`);
+                        }
+                      }}
+                    >
                       {formatCurrency(estimate.total_amount)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell 
+                      className="cursor-pointer"
+                      onClick={() => {
+                        if (projectId) {
+                          navigate(`/projects/${projectId}/estimates/${estimate.id}`);
+                        } else {
+                          navigate(`/estimates/${estimate.id}`);
+                        }
+                      }}
+                    >
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(estimate.status)}`}>
                         {estimate.status}
                       </span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell 
+                      className="cursor-pointer"
+                      onClick={() => {
+                        if (projectId) {
+                          navigate(`/projects/${projectId}/estimates/${estimate.id}`);
+                        } else {
+                          navigate(`/estimates/${estimate.id}`);
+                        }
+                      }}
+                    >
                       {format(new Date(estimate.created_at), 'MMM dd, yyyy')}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteEstimate(estimate.id, estimate.estimate_number);
+                        }}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))
