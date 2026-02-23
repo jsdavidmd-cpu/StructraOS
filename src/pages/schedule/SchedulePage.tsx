@@ -892,6 +892,124 @@ export default function SchedulePage() {
     );
   };
 
+  const exportAnalyticsPdfSnapshot = () => {
+    const phaseRows = scheduleAnalytics.phaseSlippage
+      .map(
+        (item) => `
+          <tr>
+            <td>${item.phase}</td>
+            <td>${item.avgSlip > 0 ? '+' : ''}${item.avgSlip}</td>
+            <td>${item.delayed}</td>
+            <td>${item.ahead}</td>
+            <td>${item.count}</td>
+          </tr>
+        `
+      )
+      .join('');
+
+    const weeklyRows = weeklySlippage
+      .map(
+        (entry) => `
+          <tr>
+            <td>${entry.task.wbs_code || ''}</td>
+            <td>${entry.task.task_name}</td>
+            <td>${entry.task.phase || 'Unassigned'}</td>
+            <td>${entry.task.status}</td>
+            <td>${entry.slipDays}</td>
+            <td>${entry.severity}</td>
+            <td>${entry.baselineEnd}</td>
+            <td>${entry.comparisonEnd}</td>
+            <td>${entry.updatedAt}</td>
+          </tr>
+        `
+      )
+      .join('');
+
+    const html = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Schedule Analytics Snapshot</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
+          h1 { font-size: 20px; margin-bottom: 4px; }
+          .meta { color: #555; font-size: 12px; margin-bottom: 18px; }
+          .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+          .card { border: 1px solid #ddd; border-radius: 8px; padding: 10px; }
+          .label { font-size: 12px; color: #555; }
+          .value { font-size: 20px; font-weight: 700; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 18px; }
+          th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 12px; text-align: left; }
+          th { background: #f5f5f5; }
+          @media print { body { margin: 12mm; } }
+        </style>
+      </head>
+      <body>
+        <h1>Schedule Analytics Snapshot</h1>
+        <div class="meta">Generated: ${new Date().toLocaleString()}</div>
+
+        <div class="grid">
+          <div class="card"><div class="label">SPI-Like Index</div><div class="value">${scheduleAnalytics.spi.toFixed(2)}</div></div>
+          <div class="card"><div class="label">Baseline Coverage</div><div class="value">${scheduleAnalytics.baselineCoverage}%</div></div>
+          <div class="card"><div class="label">Planned Value</div><div class="value">${scheduleAnalytics.plannedValue}</div></div>
+          <div class="card"><div class="label">Earned Value</div><div class="value">${scheduleAnalytics.earnedValue}</div></div>
+        </div>
+
+        <h2>Phase Slippage</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Phase</th>
+              <th>Avg Slip (days)</th>
+              <th>Delayed</th>
+              <th>Ahead</th>
+              <th>Sample Size</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${phaseRows || '<tr><td colspan="5">No phase slippage data</td></tr>'}
+          </tbody>
+        </table>
+
+        <h2>What Slipped This Week</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>WBS</th>
+              <th>Task</th>
+              <th>Phase</th>
+              <th>Status</th>
+              <th>Slip Days</th>
+              <th>Severity</th>
+              <th>Baseline End</th>
+              <th>Current End</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${weeklyRows || '<tr><td colspan="9">No weekly slippage data</td></tr>'}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1200,height=900');
+    if (!printWindow) {
+      setError('Unable to open print window. Please allow pop-ups and try again.');
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  };
+
   if (!projectId) {
     return (
       <div className="space-y-4">
@@ -912,6 +1030,10 @@ export default function SchedulePage() {
           <Button variant="outline" onClick={() => void generateFromBoq()} disabled={saving}>
             <Workflow className="h-4 w-4 mr-2" />
             Generate from BOQ
+          </Button>
+          <Button variant="outline" onClick={exportAnalyticsPdfSnapshot}>
+            <Download className="h-4 w-4 mr-2" />
+            PDF Snapshot
           </Button>
           <Button variant="outline" onClick={() => void renumberWbs()} disabled={saving}>
             <RefreshCw className="h-4 w-4 mr-2" />
